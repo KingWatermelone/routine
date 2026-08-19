@@ -9,6 +9,15 @@ class TaskListScreen extends StatefulWidget {
 }
 
 class _TaskListScreenState extends State<TaskListScreen> {
+
+  static const List<String> categories = [
+    'Personal',
+    'Work',
+    'Study',
+    'Home',
+    'Shopping',
+  ];
+
   final List<Task> tasks = [
     Task(
       id: '1',
@@ -17,12 +26,34 @@ class _TaskListScreenState extends State<TaskListScreen> {
     ),
   ];
 
-  void addTask(String title) {
+  Color categoryColor(String category) {
+    switch (category) {
+      case 'Work':
+        return CupertinoColors.systemBlue;
+
+      case 'Study':
+        return CupertinoColors.systemPurple;
+
+      case 'Home':
+        return CupertinoColors.systemOrange;
+
+      case 'Shopping':
+        return CupertinoColors.systemGreen;
+
+      case 'Personal':
+      default:
+        return CupertinoColors.systemPink;
+    }
+  }
+
+
+  void addTask(String title, String category) {
     setState(() {
       tasks.add(
         Task(
           id: DateTime.now().microsecondsSinceEpoch.toString(),
           title: title,
+          category: category,
         ),
       );
     });
@@ -40,46 +71,165 @@ class _TaskListScreenState extends State<TaskListScreen> {
     });
   }
 
+  Widget buildCategoryDropdown({
+    required String selectedCategory,
+    required ValueChanged<String> onSelected,
+  }) {
+    return CupertinoMenuAnchor(
+      menuChildren: categories.map((category) {
+        return CupertinoMenuItem(
+          leading: Icon(
+            category == selectedCategory
+                ? CupertinoIcons.check_mark
+                : CupertinoIcons.circle,
+            size: 16,
+            color: categoryColor(category),
+          ),
+          onPressed: () {
+            onSelected(category);
+          },
+          child: Text(category),
+        );
+      }).toList(),
+      builder: (
+          BuildContext context,
+          MenuController controller,
+          Widget? child,
+          ) {
+        return SizedBox(
+          width: double.infinity,
+          child: CupertinoButton(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
+            ),
+            color: CupertinoColors.tertiarySystemFill,
+            onPressed: () {
+              if (controller.isOpen) {
+                controller.close();
+              } else {
+                controller.open();
+              }
+            },
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 9,
+                      height: 9,
+                      decoration: BoxDecoration(
+                        color: categoryColor(selectedCategory),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(selectedCategory),
+                  ],
+                ),
+                const Icon(
+                  CupertinoIcons.chevron_down,
+                  size: 15,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> showAddTaskDialog() async {
-    final controller = TextEditingController();
+    final titleController = TextEditingController();
+    String selectedCategory = categories.first;
 
     await showCupertinoDialog<void>(
       context: context,
       builder: (dialogContext) {
-        return CupertinoAlertDialog(
-          title: const Text('New Task'),
-          content: Padding(
-            padding: const EdgeInsets.only(top: 16),
-            child: CupertinoTextField(
-              controller: controller,
-              autofocus: true,
-              placeholder: 'What needs to be done?',
-              textInputAction: TextInputAction.done,
-              onSubmitted: (_) {
-                submitTask(controller, dialogContext);
-              },
-            ),
-          ),
-          actions: [
-            CupertinoDialogAction(
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-              },
-              child: const Text('Cancel'),
-            ),
-            CupertinoDialogAction(
-              isDefaultAction: true,
-              onPressed: () {
-                submitTask(controller, dialogContext);
-              },
-              child: const Text('Add'),
-            ),
-          ],
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return CupertinoAlertDialog(
+              title: const Text('New Task'),
+              content: Column(
+                children: [
+                  const SizedBox(height: 16),
+                  CupertinoTextField(
+                    controller: titleController,
+                    autofocus: true,
+                    placeholder: 'What needs to be done?',
+                    textInputAction: TextInputAction.done,
+
+                    // Desktop-friendly cursor
+                    cursorWidth: 1,
+                    // cursorHeight: 18,
+                    cursorRadius: Radius.zero,
+                    cursorOpacityAnimates: false,
+                    cursorColor: CupertinoColors.systemBlue,
+
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      height: 1.25,
+                    ),
+                    onSubmitted: (_) {
+                      submitTask(
+                        titleController,
+                        selectedCategory,
+                        dialogContext,
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Category',
+                      style: TextStyle(
+                        color: CupertinoColors.secondaryLabel,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  buildCategoryDropdown(
+                    selectedCategory: selectedCategory,
+                    onSelected: (category) {
+                      setDialogState(() {
+                        selectedCategory = category;
+                      });
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                CupertinoDialogAction(
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop();
+                  },
+                  child: const Text('Cancel'),
+                ),
+                CupertinoDialogAction(
+                  isDefaultAction: true,
+                  onPressed: () {
+                    submitTask(
+                      titleController,
+                      selectedCategory,
+                      dialogContext,
+                    );
+                  },
+                  child: const Text('Add'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
 
-    controller.dispose();
+    titleController.dispose();
   }
 
   Future<void> showEditTaskDialog(Task task) async {
@@ -91,50 +241,102 @@ class _TaskListScreenState extends State<TaskListScreen> {
       text: task.description,
     );
 
+    String selectedCategory = categories.contains(task.category)
+        ? task.category
+        : categories.first;
+
     await showCupertinoDialog<void>(
       context: context,
       builder: (dialogContext) {
-        return CupertinoAlertDialog(
-          title: const Text('Edit Task'),
-          content: Padding(
-            padding: const EdgeInsets.only(top: 16),
-            child: Column(
-              children: [
-                CupertinoTextField(
-                  controller: titleController,
-                  autofocus: true,
-                  placeholder: 'Task title',
-                  textInputAction: TextInputAction.next,
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return CupertinoAlertDialog(
+              title: const Text('Edit Task'),
+              content: Column(
+                children: [
+                  const SizedBox(height: 16),
+                  CupertinoTextField(
+                    controller: titleController,
+                    autofocus: true,
+                    placeholder: 'Task title',
+                    textInputAction: TextInputAction.next,
+                    cursorWidth: 1,
+                    cursorHeight: 18,
+                    cursorRadius: Radius.zero,
+                    cursorOpacityAnimates: false,
+                    cursorColor: CupertinoColors.systemBlue,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      height: 1.25,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  CupertinoTextField(
+                    controller: descriptionController,
+                    placeholder: 'Description',
+                    maxLines: 3,
+                    cursorWidth: 1,
+                    cursorHeight: 18,
+                    cursorRadius: Radius.zero,
+                    cursorOpacityAnimates: false,
+                    cursorColor: CupertinoColors.systemBlue,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      height: 1.25,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Category',
+                      style: TextStyle(
+                        color: CupertinoColors.secondaryLabel,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  buildCategoryDropdown(
+                    selectedCategory: selectedCategory,
+                    onSelected: (category) {
+                      setDialogState(() {
+                        selectedCategory = category;
+                      });
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                CupertinoDialogAction(
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop();
+                  },
+                  child: const Text('Cancel'),
                 ),
-                const SizedBox(height: 12),
-                CupertinoTextField(
-                  controller: descriptionController,
-                  placeholder: 'Description',
-                  maxLines: 3,
+                CupertinoDialogAction(
+                  isDefaultAction: true,
+                  onPressed: () {
+                    saveEditedTask(
+                      task,
+                      titleController,
+                      descriptionController,
+                      selectedCategory,
+                      dialogContext,
+                    );
+                  },
+                  child: const Text('Save'),
                 ),
               ],
-            ),
-          ),
-          actions: [
-            CupertinoDialogAction(
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-              },
-              child: const Text('Cancel'),
-            ),
-            CupertinoDialogAction(
-              isDefaultAction: true,
-              onPressed: () {
-                saveEditedTask(
-                  task,
-                  titleController,
-                  descriptionController,
-                  dialogContext,
-                );
-              },
-              child: const Text('Save'),
-            ),
-          ],
+            );
+          },
         );
       },
     );
@@ -147,6 +349,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
       Task task,
       TextEditingController titleController,
       TextEditingController descriptionController,
+      String selectedCategory,
       BuildContext dialogContext,
       ) {
     final newTitle = titleController.text.trim();
@@ -159,22 +362,24 @@ class _TaskListScreenState extends State<TaskListScreen> {
     setState(() {
       task.title = newTitle;
       task.description = newDescription;
+      task.category = selectedCategory;
     });
 
     Navigator.of(dialogContext).pop();
   }
 
   void submitTask(
-      TextEditingController controller,
+      TextEditingController titleController,
+      String selectedCategory,
       BuildContext dialogContext,
       ) {
-    final title = controller.text.trim();
+    final title = titleController.text.trim();
 
     if (title.isEmpty) {
       return;
     }
 
-    addTask(title);
+    addTask(title, selectedCategory);
     Navigator.of(dialogContext).pop();
   }
 
@@ -246,9 +451,28 @@ class _TaskListScreenState extends State<TaskListScreen> {
               : null,
         ),
       ),
-      subtitle: task.description.isEmpty
-          ? Text(task.category)
-          : Text('${task.category} · ${task.description}'),
+      subtitle: Row(
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: categoryColor(task.category),
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              task.description.isEmpty
+                  ? task.category
+                  : '${task.category} · ${task.description}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
       trailing: CupertinoButton(
         padding: EdgeInsets.zero,
         onPressed: () {
