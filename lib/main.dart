@@ -1,4 +1,6 @@
 import 'package:flutter/cupertino.dart';
+
+import 'data/shared_preferences_task_repository.dart';
 import 'screens/task_list_screen.dart';
 
 void main() {
@@ -10,14 +12,14 @@ class PersonalOrganizerApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const CupertinoApp(
+    return CupertinoApp(
       title: 'Personal Organizer',
       debugShowCheckedModeBanner: false,
-      theme: CupertinoThemeData(
+      theme: const CupertinoThemeData(
         primaryColor: CupertinoColors.systemBlue,
         brightness: Brightness.light,
       ),
-      home: TaskListScreen(),
+      home: TaskListScreen(repository: SharedPreferencesTaskRepository()),
     );
   }
 }

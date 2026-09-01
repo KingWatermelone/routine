@@ -1,386 +1,46 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
+
+import '../controllers/task_controller.dart';
+import '../data/task_repository.dart';
 import '../models/task.dart';
+import 'task_editor_dialog.dart';
 
 class TaskListScreen extends StatefulWidget {
-  const TaskListScreen({super.key});
+  const TaskListScreen({required this.repository, super.key});
+
+  final TaskRepository repository;
 
   @override
   State<TaskListScreen> createState() => _TaskListScreenState();
 }
 
 class _TaskListScreenState extends State<TaskListScreen> {
+  late final TaskController _controller;
+  final TextEditingController _searchController = TextEditingController();
 
-  static const List<String> categories = [
-    'Personal',
-    'Work',
-    'Study',
-    'Home',
-    'Shopping',
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _controller = TaskController(repository: widget.repository)
+      ..addListener(_onControllerChanged);
+    unawaited(_controller.load());
+  }
 
-  final List<Task> tasks = [
-    Task(
-      id: '1',
-      title: 'Test the Flutter application',
-      category: 'Development',
-    ),
-  ];
+  @override
+  void dispose() {
+    _controller
+      ..removeListener(_onControllerChanged)
+      ..dispose();
+    _searchController.dispose();
+    super.dispose();
+  }
 
-  Color categoryColor(String category) {
-    switch (category) {
-      case 'Work':
-        return CupertinoColors.systemBlue;
-
-      case 'Study':
-        return CupertinoColors.systemPurple;
-
-      case 'Home':
-        return CupertinoColors.systemOrange;
-
-      case 'Shopping':
-        return CupertinoColors.systemGreen;
-
-      case 'Personal':
-      default:
-        return CupertinoColors.systemPink;
+  void _onControllerChanged() {
+    if (mounted) {
+      setState(() {});
     }
-  }
-
-
-  void addTask(String title, String category) {
-    setState(() {
-      tasks.add(
-        Task(
-          id: DateTime.now().microsecondsSinceEpoch.toString(),
-          title: title,
-          category: category,
-        ),
-      );
-    });
-  }
-
-  void toggleTask(Task task) {
-    setState(() {
-      task.isCompleted = !task.isCompleted;
-    });
-  }
-
-  void deleteTask(Task task) {
-    setState(() {
-      tasks.remove(task);
-    });
-  }
-
-  Widget buildCategoryDropdown({
-    required String selectedCategory,
-    required ValueChanged<String> onSelected,
-  }) {
-    return CupertinoMenuAnchor(
-      menuChildren: categories.map((category) {
-        return CupertinoMenuItem(
-          leading: Icon(
-            category == selectedCategory
-                ? CupertinoIcons.check_mark
-                : CupertinoIcons.circle,
-            size: 16,
-            color: categoryColor(category),
-          ),
-          onPressed: () {
-            onSelected(category);
-          },
-          child: Text(category),
-        );
-      }).toList(),
-      builder: (
-          BuildContext context,
-          MenuController controller,
-          Widget? child,
-          ) {
-        return SizedBox(
-          width: double.infinity,
-          child: CupertinoButton(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 10,
-            ),
-            color: CupertinoColors.tertiarySystemFill,
-            onPressed: () {
-              if (controller.isOpen) {
-                controller.close();
-              } else {
-                controller.open();
-              }
-            },
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 9,
-                      height: 9,
-                      decoration: BoxDecoration(
-                        color: categoryColor(selectedCategory),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(selectedCategory),
-                  ],
-                ),
-                const Icon(
-                  CupertinoIcons.chevron_down,
-                  size: 15,
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> showAddTaskDialog() async {
-    final titleController = TextEditingController();
-    String selectedCategory = categories.first;
-
-    await showCupertinoDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return CupertinoAlertDialog(
-              title: const Text('New Task'),
-              content: Column(
-                children: [
-                  const SizedBox(height: 16),
-                  CupertinoTextField(
-                    controller: titleController,
-                    autofocus: true,
-                    placeholder: 'What needs to be done?',
-                    textInputAction: TextInputAction.done,
-
-                    // Desktop-friendly cursor
-                    cursorWidth: 1,
-                    // cursorHeight: 18,
-                    cursorRadius: Radius.zero,
-                    cursorOpacityAnimates: false,
-                    cursorColor: CupertinoColors.systemBlue,
-
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                    style: const TextStyle(
-                      fontSize: 16,
-                      height: 1.25,
-                    ),
-                    onSubmitted: (_) {
-                      submitTask(
-                        titleController,
-                        selectedCategory,
-                        dialogContext,
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  const Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Category',
-                      style: TextStyle(
-                        color: CupertinoColors.secondaryLabel,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  buildCategoryDropdown(
-                    selectedCategory: selectedCategory,
-                    onSelected: (category) {
-                      setDialogState(() {
-                        selectedCategory = category;
-                      });
-                    },
-                  ),
-                ],
-              ),
-              actions: [
-                CupertinoDialogAction(
-                  onPressed: () {
-                    Navigator.of(dialogContext).pop();
-                  },
-                  child: const Text('Cancel'),
-                ),
-                CupertinoDialogAction(
-                  isDefaultAction: true,
-                  onPressed: () {
-                    submitTask(
-                      titleController,
-                      selectedCategory,
-                      dialogContext,
-                    );
-                  },
-                  child: const Text('Add'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-
-    titleController.dispose();
-  }
-
-  Future<void> showEditTaskDialog(Task task) async {
-    final titleController = TextEditingController(
-      text: task.title,
-    );
-
-    final descriptionController = TextEditingController(
-      text: task.description,
-    );
-
-    String selectedCategory = categories.contains(task.category)
-        ? task.category
-        : categories.first;
-
-    await showCupertinoDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return CupertinoAlertDialog(
-              title: const Text('Edit Task'),
-              content: Column(
-                children: [
-                  const SizedBox(height: 16),
-                  CupertinoTextField(
-                    controller: titleController,
-                    autofocus: true,
-                    placeholder: 'Task title',
-                    textInputAction: TextInputAction.next,
-                    cursorWidth: 1,
-                    cursorHeight: 18,
-                    cursorRadius: Radius.zero,
-                    cursorOpacityAnimates: false,
-                    cursorColor: CupertinoColors.systemBlue,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                    style: const TextStyle(
-                      fontSize: 16,
-                      height: 1.25,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  CupertinoTextField(
-                    controller: descriptionController,
-                    placeholder: 'Description',
-                    maxLines: 3,
-                    cursorWidth: 1,
-                    cursorHeight: 18,
-                    cursorRadius: Radius.zero,
-                    cursorOpacityAnimates: false,
-                    cursorColor: CupertinoColors.systemBlue,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                    style: const TextStyle(
-                      fontSize: 16,
-                      height: 1.25,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Category',
-                      style: TextStyle(
-                        color: CupertinoColors.secondaryLabel,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  buildCategoryDropdown(
-                    selectedCategory: selectedCategory,
-                    onSelected: (category) {
-                      setDialogState(() {
-                        selectedCategory = category;
-                      });
-                    },
-                  ),
-                ],
-              ),
-              actions: [
-                CupertinoDialogAction(
-                  onPressed: () {
-                    Navigator.of(dialogContext).pop();
-                  },
-                  child: const Text('Cancel'),
-                ),
-                CupertinoDialogAction(
-                  isDefaultAction: true,
-                  onPressed: () {
-                    saveEditedTask(
-                      task,
-                      titleController,
-                      descriptionController,
-                      selectedCategory,
-                      dialogContext,
-                    );
-                  },
-                  child: const Text('Save'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-
-    titleController.dispose();
-    descriptionController.dispose();
-  }
-
-  void saveEditedTask(
-      Task task,
-      TextEditingController titleController,
-      TextEditingController descriptionController,
-      String selectedCategory,
-      BuildContext dialogContext,
-      ) {
-    final newTitle = titleController.text.trim();
-    final newDescription = descriptionController.text.trim();
-
-    if (newTitle.isEmpty) {
-      return;
-    }
-
-    setState(() {
-      task.title = newTitle;
-      task.description = newDescription;
-      task.category = selectedCategory;
-    });
-
-    Navigator.of(dialogContext).pop();
-  }
-
-  void submitTask(
-      TextEditingController titleController,
-      String selectedCategory,
-      BuildContext dialogContext,
-      ) {
-    final title = titleController.text.trim();
-
-    if (title.isEmpty) {
-      return;
-    }
-
-    addTask(title, selectedCategory);
-    Navigator.of(dialogContext).pop();
   }
 
   @override
@@ -390,47 +50,303 @@ class _TaskListScreenState extends State<TaskListScreen> {
       navigationBar: CupertinoNavigationBar(
         middle: const Text('Tasks'),
         trailing: CupertinoButton(
+          key: const ValueKey<String>('add-task-button'),
           padding: EdgeInsets.zero,
-          onPressed: showAddTaskDialog,
+          onPressed: _showAddTaskDialog,
           child: const Icon(CupertinoIcons.add),
         ),
       ),
       child: SafeArea(
-        child: tasks.isEmpty
-            ? const Center(
-          child: Text(
-            'No tasks yet',
-            style: TextStyle(
-              color: CupertinoColors.secondaryLabel,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 820),
+            child: Column(
+              children: <Widget>[
+                _buildFilters(),
+                if (_controller.storageError != null) _buildStorageError(),
+                Expanded(child: _buildTaskContent()),
+              ],
             ),
           ),
-        )
-            : ListView(
-          padding: const EdgeInsets.only(
-            top: 20,
-            bottom: 20,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilters() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+      child: Column(
+        children: <Widget>[
+          CupertinoSearchTextField(
+            key: const ValueKey<String>('task-search-field'),
+            controller: _searchController,
+            placeholder: 'Search tasks',
+            onChanged: _controller.setSearchQuery,
           ),
-          children: [
-            CupertinoListSection.insetGrouped(
-              header: const Text('MY TASKS'),
-              children: tasks.map(buildTaskTile).toList(),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: CupertinoSlidingSegmentedControl<TaskStatusFilter>(
+              groupValue: _controller.statusFilter,
+              children: const <TaskStatusFilter, Widget>{
+                TaskStatusFilter.open: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8),
+                  child: Text('Open'),
+                ),
+                TaskStatusFilter.completed: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8),
+                  child: Text('Completed'),
+                ),
+                TaskStatusFilter.all: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8),
+                  child: Text('All'),
+                ),
+              },
+              onValueChanged: (TaskStatusFilter? filter) {
+                if (filter != null) {
+                  _controller.setStatusFilter(filter);
+                }
+              },
             ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: <Widget>[
+              Expanded(child: _buildCategoryFilter()),
+              const SizedBox(width: 10),
+              Expanded(child: _buildPriorityFilter()),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCategoryFilter() {
+    final String? selectedCategory = _controller.categoryFilter;
+    return CupertinoMenuAnchor(
+      menuChildren: <Widget>[
+        CupertinoMenuItem(
+          leading: Icon(
+            selectedCategory == null
+                ? CupertinoIcons.check_mark
+                : CupertinoIcons.circle,
+            size: 16,
+          ),
+          onPressed: () => _controller.setCategoryFilter(null),
+          child: const Text('All categories'),
+        ),
+        ..._controller.categories.map((String category) {
+          return CupertinoMenuItem(
+            leading: Icon(
+              selectedCategory == category
+                  ? CupertinoIcons.check_mark
+                  : CupertinoIcons.circle,
+              size: 16,
+              color: categoryColor(category),
+            ),
+            onPressed: () => _controller.setCategoryFilter(category),
+            child: Text(category),
+          );
+        }),
+      ],
+      builder:
+          (BuildContext context, MenuController menuController, Widget? child) {
+            return _filterButton(
+              key: const ValueKey<String>('category-filter-button'),
+              label: selectedCategory ?? 'All categories',
+              icon: CupertinoIcons.folder,
+              onPressed: menuController.isOpen
+                  ? menuController.close
+                  : menuController.open,
+            );
+          },
+    );
+  }
+
+  Widget _buildPriorityFilter() {
+    final TaskPriority? selectedPriority = _controller.priorityFilter;
+    return CupertinoMenuAnchor(
+      menuChildren: <Widget>[
+        CupertinoMenuItem(
+          leading: Icon(
+            selectedPriority == null
+                ? CupertinoIcons.check_mark
+                : CupertinoIcons.circle,
+            size: 16,
+          ),
+          onPressed: () => _controller.setPriorityFilter(null),
+          child: const Text('All priorities'),
+        ),
+        ...TaskPriority.values.map((TaskPriority priority) {
+          return CupertinoMenuItem(
+            leading: Icon(
+              selectedPriority == priority
+                  ? CupertinoIcons.check_mark
+                  : CupertinoIcons.circle,
+              size: 16,
+            ),
+            onPressed: () => _controller.setPriorityFilter(priority),
+            child: Text(priorityLabel(priority)),
+          );
+        }),
+      ],
+      builder:
+          (BuildContext context, MenuController menuController, Widget? child) {
+            return _filterButton(
+              key: const ValueKey<String>('priority-filter-button'),
+              label: selectedPriority == null
+                  ? 'All priorities'
+                  : priorityLabel(selectedPriority),
+              icon: CupertinoIcons.flag,
+              onPressed: menuController.isOpen
+                  ? menuController.close
+                  : menuController.open,
+            );
+          },
+    );
+  }
+
+  Widget _filterButton({
+    required Key key,
+    required String label,
+    required IconData icon,
+    required VoidCallback onPressed,
+  }) {
+    return SizedBox(
+      width: double.infinity,
+      child: CupertinoButton(
+        key: key,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+        color: CupertinoColors.tertiarySystemFill,
+        onPressed: onPressed,
+        child: Row(
+          children: <Widget>[
+            Icon(icon, size: 16),
+            const SizedBox(width: 7),
+            Expanded(
+              child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+            ),
+            const Icon(CupertinoIcons.chevron_down, size: 13),
           ],
         ),
       ),
     );
   }
 
-  Widget buildTaskTile(Task task) {
+  Widget _buildStorageError() {
+    return Container(
+      key: const ValueKey<String>('storage-error'),
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      padding: const EdgeInsets.only(left: 12),
+      decoration: BoxDecoration(
+        color: CupertinoColors.systemRed.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: <Widget>[
+          const Icon(
+            CupertinoIcons.exclamationmark_triangle,
+            color: CupertinoColors.systemRed,
+            size: 18,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              _controller.storageError!,
+              style: const TextStyle(fontSize: 13),
+            ),
+          ),
+          CupertinoButton(
+            padding: const EdgeInsets.all(10),
+            onPressed: _controller.clearStorageError,
+            child: const Icon(CupertinoIcons.clear, size: 16),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTaskContent() {
+    if (_controller.isLoading) {
+      return const Center(child: CupertinoActivityIndicator());
+    }
+
+    final List<Task> tasks = _controller.visibleTasks;
+    if (tasks.isEmpty) {
+      final bool hasFilters =
+          _controller.searchQuery.trim().isNotEmpty ||
+          _controller.categoryFilter != null ||
+          _controller.priorityFilter != null;
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              const Icon(
+                CupertinoIcons.check_mark_circled,
+                color: CupertinoColors.systemGrey2,
+                size: 44,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                hasFilters ? 'No matching tasks' : _emptyMessage(),
+                key: const ValueKey<String>('empty-task-message'),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: CupertinoColors.secondaryLabel,
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return ListView(
+      padding: const EdgeInsets.only(top: 8, bottom: 24),
+      children: <Widget>[
+        CupertinoListSection.insetGrouped(
+          header: Text(_sectionTitle()),
+          children: tasks.map(_buildTaskTile).toList(),
+        ),
+      ],
+    );
+  }
+
+  String _emptyMessage() {
+    return switch (_controller.statusFilter) {
+      TaskStatusFilter.open => 'No open tasks',
+      TaskStatusFilter.completed => 'No completed tasks',
+      TaskStatusFilter.all => 'No tasks yet',
+    };
+  }
+
+  String _sectionTitle() {
+    return switch (_controller.statusFilter) {
+      TaskStatusFilter.open => 'OPEN TASKS',
+      TaskStatusFilter.completed => 'COMPLETED TASKS',
+      TaskStatusFilter.all => 'ALL TASKS',
+    };
+  }
+
+  Widget _buildTaskTile(Task task) {
+    final String metadata = <String>[
+      task.category,
+      priorityLabel(task.priority),
+      if (task.dueDate != null) formatDateTime(task.dueDate!),
+    ].join(' · ');
+
     return CupertinoListTile(
-      onTap: () {
-        showEditTaskDialog(task);
-      },
+      key: ValueKey<String>('task-${task.id}'),
+      onTap: () => _showEditTaskDialog(task),
       leading: CupertinoButton(
+        key: ValueKey<String>('toggle-task-${task.id}'),
         padding: EdgeInsets.zero,
-        onPressed: () {
-          toggleTask(task);
-        },
+        onPressed: () => unawaited(_controller.toggleTask(task)),
         child: Icon(
           task.isCompleted
               ? CupertinoIcons.check_mark_circled_solid
@@ -446,38 +362,44 @@ class _TaskListScreenState extends State<TaskListScreen> {
           color: task.isCompleted
               ? CupertinoColors.secondaryLabel
               : CupertinoColors.label,
-          decoration: task.isCompleted
-              ? TextDecoration.lineThrough
-              : null,
+          decoration: task.isCompleted ? TextDecoration.lineThrough : null,
         ),
       ),
-      subtitle: Row(
-        children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              color: categoryColor(task.category),
-              shape: BoxShape.circle,
-            ),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: categoryColor(task.category),
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  metadata,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              task.description.isEmpty
-                  ? task.category
-                  : '${task.category} · ${task.description}',
+          if (task.description.isNotEmpty)
+            Text(
+              task.description,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
-          ),
         ],
       ),
       trailing: CupertinoButton(
+        key: ValueKey<String>('delete-task-${task.id}'),
         padding: EdgeInsets.zero,
-        onPressed: () {
-          showDeleteConfirmation(task);
-        },
+        onPressed: () => _showDeleteConfirmation(task),
         child: const Icon(
           CupertinoIcons.delete,
           color: CupertinoColors.systemRed,
@@ -487,27 +409,98 @@ class _TaskListScreenState extends State<TaskListScreen> {
     );
   }
 
-  Future<void> showDeleteConfirmation(Task task) async {
-    await showCupertinoDialog<void>(
+  Future<void> _showAddTaskDialog() async {
+    final TaskDraft? draft = await showCupertinoDialog<TaskDraft>(
       context: context,
-      builder: (dialogContext) {
+      builder: (BuildContext context) {
+        return TaskEditorDialog(categories: _controller.categories);
+      },
+    );
+    if (draft == null) {
+      return;
+    }
+
+    try {
+      await _controller.addTask(
+        title: draft.title,
+        description: draft.description,
+        category: draft.category,
+        priority: draft.priority,
+        dueDate: draft.dueDate,
+        reminders: draft.reminders,
+      );
+    } on TaskValidationException catch (error) {
+      if (mounted) {
+        await _showValidationError(error.message);
+      }
+    }
+  }
+
+  Future<void> _showEditTaskDialog(Task task) async {
+    final TaskDraft? draft = await showCupertinoDialog<TaskDraft>(
+      context: context,
+      builder: (BuildContext context) {
+        return TaskEditorDialog(categories: _controller.categories, task: task);
+      },
+    );
+    if (draft == null) {
+      return;
+    }
+
+    try {
+      await _controller.updateTask(
+        task.copyWith(
+          title: draft.title,
+          description: draft.description,
+          category: draft.category,
+          priority: draft.priority,
+          dueDate: draft.dueDate,
+          clearDueDate: draft.dueDate == null,
+          reminders: draft.reminders,
+        ),
+      );
+    } on TaskValidationException catch (error) {
+      if (mounted) {
+        await _showValidationError(error.message);
+      }
+    }
+  }
+
+  Future<void> _showValidationError(String message) {
+    return showCupertinoDialog<void>(
+      context: context,
+      builder: (BuildContext context) {
+        return CupertinoAlertDialog(
+          title: const Text('Task not saved'),
+          content: Text(message),
+          actions: <Widget>[
+            CupertinoDialogAction(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _showDeleteConfirmation(Task task) {
+    return showCupertinoDialog<void>(
+      context: context,
+      builder: (BuildContext context) {
         return CupertinoAlertDialog(
           title: const Text('Delete Task?'),
-          content: Text(
-            '"${task.title}" will be permanently removed.',
-          ),
-          actions: [
+          content: Text('"${task.title}" will be permanently removed.'),
+          actions: <Widget>[
             CupertinoDialogAction(
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-              },
+              onPressed: () => Navigator.of(context).pop(),
               child: const Text('Cancel'),
             ),
             CupertinoDialogAction(
               isDestructiveAction: true,
               onPressed: () {
-                deleteTask(task);
-                Navigator.of(dialogContext).pop();
+                Navigator.of(context).pop();
+                unawaited(_controller.deleteTask(task));
               },
               child: const Text('Delete'),
             ),
@@ -516,4 +509,12 @@ class _TaskListScreenState extends State<TaskListScreen> {
       },
     );
   }
+}
+
+String priorityLabel(TaskPriority priority) {
+  return switch (priority) {
+    TaskPriority.low => 'Low',
+    TaskPriority.normal => 'Normal',
+    TaskPriority.high => 'High',
+  };
 }

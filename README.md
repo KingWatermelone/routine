@@ -1,21 +1,29 @@
-<<<<<<< HEAD
 # routine
 
-Help get a Routine
+Routine is a cross-platform personal organizer built with Flutter. The current
+MVP focuses on an offline-first to-do list.
 
-## Getting Started
+## Current functionality
 
-This project is a starting point for a Flutter application.
+- Create, edit, complete, reopen and delete tasks
+- Add descriptions, categories, priorities, due dates and multiple reminders
+- Search tasks and filter by status, category and priority
+- Persist tasks locally across application restarts
+- Preserve source and related-item fields for future organizer modules
+- Validate empty titles and reminders that occur after a due date
 
-A few resources to get you started if this is your first Flutter project:
+Operating-system notifications and custom-category management are planned next.
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## Run locally
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
-=======
-# routine
->>>>>>> origin/main
+```sh
+flutter pub get
+flutter run
+```
+
+Run the checks with:
+
+```sh
+flutter analyze
+flutter test
+```
