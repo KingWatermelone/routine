@@ -1,7 +1,6 @@
-import '../models/task.dart';
+import '../models/organizer_data.dart';
 
 abstract interface class TaskRepository {
-  Future<List<Task>> loadTasks();
-
-  Future<void> saveTasks(List<Task> tasks);
+  Future<OrganizerData> loadData();
+  Future<void> saveData(OrganizerData data);
 }

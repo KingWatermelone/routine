@@ -1,7 +1,11 @@
+import 'dart:math';
+
 import 'package:flutter/foundation.dart';
 
 import '../data/task_repository.dart';
 import '../models/task.dart';
+import '../models/task_category.dart';
+import '../models/organizer_data.dart';
 
 enum TaskStatusFilter { open, completed, all }
 
@@ -18,17 +22,92 @@ class TaskController extends ChangeNotifier {
   TaskController({required this.repository, DateTime Function()? now})
     : _now = now ?? DateTime.now;
 
-  static const List<String> defaultCategories = <String>[
-    'Personal',
-    'Work',
-    'Study',
-    'Home',
-    'Shopping',
-  ];
-
   final TaskRepository repository;
   final DateTime Function() _now;
   final List<Task> _tasks = <Task>[];
+  final List<TaskCategory> _categories = [];
+  bool _loaded = false;
+  Future<void> _saveQueue = Future<void>.value();
+  List<TaskCategory> get categoryItems => List.unmodifiable(_categories);
+  TaskCategory? categoryById(String? id) {
+    for (final category in _categories) {
+      if (category.id == id) return category;
+    }
+    return null;
+  }
+
+  String categoryName(String? id) => categoryById(id)?.name ?? 'Ohne Kategorie';
+
+  Future<void> saveCategory({
+    String? id,
+    required String name,
+    required int color,
+    required String icon,
+  }) async {
+    if (!_loaded) {
+      throw const TaskValidationException('Daten sind noch nicht geladen.');
+    }
+    name = name.trim();
+    if (name.isEmpty) {
+      throw const TaskValidationException(
+        'Bitte einen Kategorienamen eingeben.',
+      );
+    }
+    if (_categories.any(
+      (item) =>
+          item.id != id && item.name.trim().toLowerCase() == name.toLowerCase(),
+    )) {
+      throw const TaskValidationException(
+        'Eine Kategorie mit diesem Namen existiert bereits.',
+      );
+    }
+    if (!TaskCategory.icons.containsKey(icon) ||
+        !TaskCategory.colors.contains(color)) {
+      throw const TaskValidationException(
+        'Bitte eine gültige Farbe und ein Icon auswählen.',
+      );
+    }
+    if (id != null && categoryById(id) == null) {
+      throw const TaskValidationException('Kategorie existiert nicht mehr.');
+    }
+    final random = Random.secure();
+    var newId =
+        id ??
+        'category-${List.generate(16, (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0')).join()}';
+    while (id == null && categoryById(newId) != null) {
+      newId = '$newId-1';
+    }
+    final category = TaskCategory(
+      id: newId,
+      name: name,
+      color: color,
+      icon: icon,
+    );
+    final index = _categories.indexWhere((item) => item.id == newId);
+    if (index < 0) {
+      _categories.add(category);
+    } else {
+      _categories[index] = category;
+    }
+    notifyListeners();
+    await _persist();
+  }
+
+  Future<void> deleteCategory(String id) async {
+    _ensureLoaded();
+    _categories.removeWhere((item) => item.id == id);
+    for (var i = 0; i < _tasks.length; i++) {
+      if (_tasks[i].categoryId == id) {
+        _tasks[i] = _tasks[i].copyWith(
+          clearCategoryId: true,
+          updatedAt: _now(),
+        );
+      }
+    }
+    if (_categoryFilter == id) _categoryFilter = null;
+    notifyListeners();
+    await _persist();
+  }
 
   bool _isLoading = true;
   String? _storageError;
@@ -46,11 +125,7 @@ class TaskController extends ChangeNotifier {
   List<Task> get tasks => List<Task>.unmodifiable(_tasks);
 
   List<String> get categories {
-    final Set<String> categories = <String>{...defaultCategories};
-    categories.addAll(_tasks.map((Task task) => task.category));
-    final List<String> result = categories.toList();
-    result.sort();
-    return result;
+    return ['', ..._categories.map((category) => category.id)];
   }
 
   List<Task> get visibleTasks {
@@ -63,7 +138,7 @@ class TaskController extends ChangeNotifier {
       };
 
       final bool matchesCategory =
-          _categoryFilter == null || task.category == _categoryFilter;
+          _categoryFilter == null || (task.categoryId ?? '') == _categoryFilter;
       final bool matchesPriority =
           _priorityFilter == null || task.priority == _priorityFilter;
       final bool matchesSearch =
@@ -85,14 +160,20 @@ class TaskController extends ChangeNotifier {
   }
 
   Future<void> load() async {
+    _loaded = false;
     _isLoading = true;
     _storageError = null;
     notifyListeners();
 
     try {
+      final data = await repository.loadData();
       _tasks
         ..clear()
-        ..addAll(await repository.loadTasks());
+        ..addAll(data.tasks);
+      _categories
+        ..clear()
+        ..addAll(data.categories);
+      _loaded = true;
     } on Object {
       _storageError = 'Tasks could not be loaded from this device.';
     } finally {
@@ -136,7 +217,7 @@ class TaskController extends ChangeNotifier {
   Future<void> addTask({
     required String title,
     String description = '',
-    String category = 'Personal',
+    String? categoryId,
     List<String> tags = const <String>[],
     TaskPriority priority = TaskPriority.normal,
     DateTime? dueDate,
@@ -145,12 +226,13 @@ class TaskController extends ChangeNotifier {
     String? relatedItemId,
   }) async {
     _validate(title: title, dueDate: dueDate, reminders: reminders);
+    _validateCategory(categoryId);
     final DateTime timestamp = _now();
     final Task task = Task(
       id: _createTaskId(timestamp),
       title: title.trim(),
       description: description.trim(),
-      category: category,
+      categoryId: categoryId == '' ? null : categoryId,
       tags: List<String>.unmodifiable(tags),
       priority: priority,
       dueDate: dueDate,
@@ -167,6 +249,7 @@ class TaskController extends ChangeNotifier {
   }
 
   Future<void> updateTask(Task task) async {
+    _validateCategory(task.categoryId);
     _validate(
       title: task.title,
       dueDate: task.dueDate,
@@ -189,6 +272,7 @@ class TaskController extends ChangeNotifier {
   }
 
   Future<void> toggleTask(Task task) async {
+    _ensureLoaded();
     final int index = _tasks.indexWhere(
       (Task existingTask) => existingTask.id == task.id,
     );
@@ -196,6 +280,7 @@ class TaskController extends ChangeNotifier {
       return;
     }
 
+    task = _tasks[index];
     final DateTime timestamp = _now();
     if (task.isCompleted) {
       _tasks[index] = task.copyWith(
@@ -217,6 +302,7 @@ class TaskController extends ChangeNotifier {
   }
 
   Future<void> deleteTask(Task task) async {
+    _ensureLoaded();
     _tasks.removeWhere((Task existingTask) => existingTask.id == task.id);
     notifyListeners();
     await _persist();
@@ -235,6 +321,7 @@ class TaskController extends ChangeNotifier {
     required DateTime? dueDate,
     required List<DateTime> reminders,
   }) {
+    _ensureLoaded();
     if (title.trim().isEmpty) {
       throw const TaskValidationException('Enter a title for the task.');
     }
@@ -252,12 +339,34 @@ class TaskController extends ChangeNotifier {
   }
 
   Future<void> _persist() async {
+    if (!_loaded) return;
+    final data = OrganizerData(List.of(_tasks), List.of(_categories));
+    final operation = _saveQueue.then((_) => repository.saveData(data));
+    _saveQueue = operation.catchError((Object error) {});
     try {
-      await repository.saveTasks(List<Task>.unmodifiable(_tasks));
+      await operation;
       _storageError = null;
+      notifyListeners();
     } on Object {
       _storageError = 'Changes could not be saved on this device.';
       notifyListeners();
+    }
+  }
+
+  Future<void> retrySave() => _persist();
+
+  void _ensureLoaded() {
+    if (!_loaded)
+      throw const TaskValidationException(
+        'Daten konnten noch nicht geladen werden.',
+      );
+  }
+
+  void _validateCategory(String? id) {
+    if (id != null && id.isNotEmpty && categoryById(id) == null) {
+      throw const TaskValidationException(
+        'Die ausgewählte Kategorie existiert nicht mehr.',
+      );
     }
   }
 

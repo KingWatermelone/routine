@@ -53,7 +53,9 @@ void main() {
     await controller.addTask(
       title: '  Write report  ',
       description: '  Add the figures  ',
-      category: 'Work',
+      categoryId: controller.categoryItems
+          .firstWhere((c) => c.name == 'Work')
+          .id,
       priority: TaskPriority.high,
       dueDate: now.add(const Duration(days: 1)),
       reminders: <DateTime>[now.add(const Duration(hours: 2))],
@@ -117,7 +119,9 @@ void main() {
 
     controller
       ..setSearchQuery('report')
-      ..setCategoryFilter('Work')
+      ..setCategoryFilter(
+        controller.categoryItems.firstWhere((c) => c.name == 'Work').id,
+      )
       ..setPriorityFilter(TaskPriority.high);
 
     expect(controller.visibleTasks.map((Task task) => task.id), <String>['1']);
