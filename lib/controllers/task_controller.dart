@@ -6,8 +6,11 @@ import '../data/task_repository.dart';
 import '../models/task.dart';
 import '../models/task_category.dart';
 import '../models/organizer_data.dart';
+import '../notifications/reminder_scheduler.dart';
 
 enum TaskStatusFilter { open, completed, all }
+
+enum TaskDateFilter { all, today, upcoming, overdue }
 
 class TaskValidationException implements Exception {
   const TaskValidationException(this.message);
@@ -19,10 +22,67 @@ class TaskValidationException implements Exception {
 }
 
 class TaskController extends ChangeNotifier {
-  TaskController({required this.repository, DateTime Function()? now})
-    : _now = now ?? DateTime.now;
+  TaskController({
+    required this.repository,
+    this.reminderScheduler,
+    DateTime Function()? now,
+  }) : _now = now ?? DateTime.now;
 
   final TaskRepository repository;
+  bool _disposed = false;
+  @override
+  void notifyListeners() {
+    if (!_disposed) super.notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  final ReminderScheduler? reminderScheduler;
+  String? reminderError;
+
+  Future<void> _syncReminders(
+    List<Task> tasks, {
+    bool requestPermission = false,
+  }) async {
+    try {
+      reminderError = await reminderScheduler?.synchronize(
+        tasks,
+        requestPermission: requestPermission,
+      );
+    } on Object {
+      reminderError = 'Erinnerungen konnten nicht mit iOS abgeglichen werden. Bitte erneut versuchen.';
+    }
+  }
+
+  Future<void> refreshReminders({bool requestPermission = false}) async {
+    if (!_loaded || reminderScheduler == null) return;
+    final operation = _saveQueue.then((_) async {
+      // Do not schedule changes whose local save failed.
+      if (_storageError == null) {
+        await _syncReminders(
+          List.of(_tasks),
+          requestPermission: requestPermission,
+        );
+      }
+    });
+    _saveQueue = operation.catchError((Object error) {});
+    await operation;
+    notifyListeners();
+  }
+
+  Future<void> openNotificationSettings() async {
+    try {
+      await reminderScheduler?.openSettings();
+    } on Object {
+      reminderError = 'Öffne Einstellungen → Mitteilungen → Routine und aktiviere Mitteilungen erlauben.';
+      notifyListeners();
+    }
+  }
+
   final DateTime Function() _now;
   final List<Task> _tasks = <Task>[];
   final List<TaskCategory> _categories = [];
@@ -115,6 +175,15 @@ class TaskController extends ChangeNotifier {
   TaskStatusFilter _statusFilter = TaskStatusFilter.open;
   String? _categoryFilter;
   TaskPriority? _priorityFilter;
+  TaskDateFilter _dateFilter = TaskDateFilter.all;
+  TaskDateFilter get dateFilter => _dateFilter;
+  void setDateFilter(TaskDateFilter filter) {
+    if (_dateFilter == filter) return;
+    _dateFilter = filter;
+    notifyListeners();
+  }
+
+  void refreshDateFilters() => notifyListeners();
 
   bool get isLoading => _isLoading;
   String? get storageError => _storageError;
@@ -129,6 +198,10 @@ class TaskController extends ChangeNotifier {
   }
 
   List<Task> get visibleTasks {
+    final now = _now().toLocal();
+    final today = DateTime(now.year, now.month, now.day);
+    // Construct calendar boundaries instead of adding 24 hours (DST days differ).
+    final tomorrow = DateTime(now.year, now.month, now.day + 1);
     final String normalizedQuery = _searchQuery.trim().toLowerCase();
     final List<Task> result = _tasks.where((Task task) {
       final bool matchesStatus = switch (_statusFilter) {
@@ -139,6 +212,15 @@ class TaskController extends ChangeNotifier {
 
       final bool matchesCategory =
           _categoryFilter == null || (task.categoryId ?? '') == _categoryFilter;
+      final due = task.dueDate?.toLocal();
+      final matchesDate = switch (_dateFilter) {
+        TaskDateFilter.all => true,
+        TaskDateFilter.today =>
+          due != null && !due.isBefore(today) && due.isBefore(tomorrow),
+        TaskDateFilter.upcoming => due != null && !due.isBefore(tomorrow),
+        TaskDateFilter.overdue =>
+          due != null && due.isBefore(now) && !task.isCompleted,
+      };
       final bool matchesPriority =
           _priorityFilter == null || task.priority == _priorityFilter;
       final bool matchesSearch =
@@ -150,6 +232,7 @@ class TaskController extends ChangeNotifier {
           );
 
       return matchesStatus &&
+          matchesDate &&
           matchesCategory &&
           matchesPriority &&
           matchesSearch;
@@ -173,6 +256,7 @@ class TaskController extends ChangeNotifier {
       _categories
         ..clear()
         ..addAll(data.categories);
+      await _syncReminders(List.of(_tasks));
       _loaded = true;
     } on Object {
       _storageError = 'Tasks could not be loaded from this device.';
@@ -341,7 +425,10 @@ class TaskController extends ChangeNotifier {
   Future<void> _persist() async {
     if (!_loaded) return;
     final data = OrganizerData(List.of(_tasks), List.of(_categories));
-    final operation = _saveQueue.then((_) => repository.saveData(data));
+    final operation = _saveQueue.then((_) async {
+      await repository.saveData(data);
+      await _syncReminders(data.tasks, requestPermission: true);
+    });
     _saveQueue = operation.catchError((Object error) {});
     try {
       await operation;
