@@ -40,8 +40,67 @@ record. Storage failures are displayed; the category screen offers a retry.
 This remains SharedPreferences-based local storage, not a transactional database
 or a cloud backup.
 
-Operating-system notifications are still planned; saved reminder times do not
-yet trigger notifications. Cursor styling is unchanged.
+iOS local notifications are implemented in the iOS-reminders branch; other
+platforms still only store reminder times. Cursor styling is unchanged.
+
+## iOS reminders
+
+The app uses Apple's UserNotifications framework through a Flutter MethodChannel,
+with no additional Dart package or remote push service. It requests alert/sound
+permission when saving future reminders, never on a plain launch. Permission
+denial and scheduling failures appear separately from storage errors, with retry
+and an iOS Settings button. Returning from Settings refreshes the schedule.
+
+After a successful local save, open tasks' future reminders are reconciled with
+iOS. Completing/deleting tasks or removing reminders cancels their pending
+requests; changing a title/time updates them. Reopening a completed task does
+not restore cleared reminders. Past reminders are not replayed. Scheduling is
+serialized with saves to avoid older operations overwriting newer schedules.
+If local saving fails, notifications retain the last saved state; resolve the
+visible storage error before closing the app. After a crash between saving and
+scheduling, the next launch reconciles the persisted state.
+
+The conservative pending-request budget is 64 across the app. The nearest future
+reminders fit first; excess reminders remain stored and a warning tells the user
+to reopen the app for replenishment. There is no background replenishment while
+the app stays closed. Foreign notification identifiers are preserved.
+
+Scheduled requests are delivered by iOS even when the app is closed, subject to
+permission, Focus, notification summaries and device settings. Foreground
+delivery requests a banner and sound too. Task titles appear in notifications.
+Reminder times represent absolute instants (UTC in the native trigger); changing
+the device time zone does not move them. Tapping a notification opens the app;
+navigation to a specific task and notification action buttons are not included.
+
+### Test on iPhone (Mac and Xcode required)
+
+1. Check out `codex/ios-reminders`, run `flutter pub get`, `flutter analyze`,
+   and `flutter test` on your Mac.
+2. Open `ios/Runner.xcworkspace` in Xcode, select your development team and a
+   unique bundle identifier under Signing & Capabilities, then select your iPhone.
+   No Push Notifications entitlement or background mode is needed for local requests.
+3. Run Runner on the phone. Create a task due in ten minutes with two reminders
+   a few minutes ahead. Grant notification permission, background/close the app,
+   lock the phone, and verify the notifications arrive.
+4. Repeat while keeping the app foregrounded, then edit reminder times/title and
+   verify old requests do not fire. Complete/delete a task before its reminders
+   and verify they do not fire; repeat after relaunch.
+5. Deny permission on a fresh installation, verify the explanation, enable it in
+   Settings, return to Routine and verify scheduling resumes. Test Focus and
+   disabled banners/sound separately.
+6. Verify no replay of past reminders, duplicate-time deduplication, and the
+   visible limit warning with more than 64 future reminders.
+7. Run the RunnerTests scheme tests in Xcode for native request validation.
+
+Validation here: Dart formatting/parsing and `git diff --check` only. Flutter
+bootstrap remains blocked by the earlier environment security review; the new
+Dart tests were not executed. Xcode/Swift compilation, XCTest and iPhone delivery
+tests require a Mac/iPhone and have not been performed. Do not merge as verified
+until those checks pass.
+
+Implementation references: [Apple local scheduling](https://developer.apple.com/documentation/usernotifications/scheduling-a-notification-locally-from-your-app),
+[notification authorization](https://developer.apple.com/documentation/usernotifications/asking-permission-to-use-notifications),
+and [Flutter platform channels](https://docs.flutter.dev/platform-integration/platform-channels).
 
 ### Manual category check
 

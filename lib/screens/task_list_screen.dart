@@ -7,6 +7,7 @@ import '../data/task_repository.dart';
 import '../models/task.dart';
 import 'task_editor_dialog.dart';
 import 'category_screen.dart';
+import '../notifications/reminder_scheduler.dart';
 
 class TaskListScreen extends StatefulWidget {
   const TaskListScreen({required this.repository, super.key});
@@ -17,20 +18,25 @@ class TaskListScreen extends StatefulWidget {
   State<TaskListScreen> createState() => _TaskListScreenState();
 }
 
-class _TaskListScreenState extends State<TaskListScreen> {
+class _TaskListScreenState extends State<TaskListScreen>
+    with WidgetsBindingObserver {
   late final TaskController _controller;
   final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _controller = TaskController(repository: widget.repository)
-      ..addListener(_onControllerChanged);
+    WidgetsBinding.instance.addObserver(this);
+    _controller = TaskController(
+      repository: widget.repository,
+      reminderScheduler: IosReminderScheduler.forPlatform(),
+    )..addListener(_onControllerChanged);
     unawaited(_controller.load());
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _controller
       ..removeListener(_onControllerChanged)
       ..dispose();
@@ -43,6 +49,37 @@ class _TaskListScreenState extends State<TaskListScreen> {
       setState(() {});
     }
   }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed)
+      unawaited(_controller.refreshReminders());
+  }
+
+  Widget _reminderStatus() => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 16),
+    child: Column(
+      children: [
+        Text(
+          _controller.reminderError!,
+          style: const TextStyle(color: CupertinoColors.systemRed),
+        ),
+        Wrap(
+          children: [
+            CupertinoButton(
+              onPressed: () =>
+                  _controller.refreshReminders(requestPermission: true),
+              child: const Text('Erneut versuchen'),
+            ),
+            CupertinoButton(
+              onPressed: _controller.openNotificationSettings,
+              child: const Text('iOS-Einstellungen'),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -75,6 +112,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
               children: <Widget>[
                 _buildFilters(),
                 if (_controller.storageError != null) _buildStorageError(),
+                if (_controller.reminderError != null) _reminderStatus(),
                 Expanded(child: _buildTaskContent()),
               ],
             ),
