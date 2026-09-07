@@ -6,6 +6,7 @@ import '../data/task_repository.dart';
 import '../models/task.dart';
 import '../models/task_category.dart';
 import '../models/organizer_data.dart';
+import '../notifications/reminder_scheduler.dart';
 
 enum TaskStatusFilter { open, completed, all }
 
@@ -19,10 +20,67 @@ class TaskValidationException implements Exception {
 }
 
 class TaskController extends ChangeNotifier {
-  TaskController({required this.repository, DateTime Function()? now})
-    : _now = now ?? DateTime.now;
+  TaskController({
+    required this.repository,
+    this.reminderScheduler,
+    DateTime Function()? now,
+  }) : _now = now ?? DateTime.now;
 
   final TaskRepository repository;
+  bool _disposed = false;
+  @override
+  void notifyListeners() {
+    if (!_disposed) super.notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  final ReminderScheduler? reminderScheduler;
+  String? reminderError;
+
+  Future<void> _syncReminders(
+    List<Task> tasks, {
+    bool requestPermission = false,
+  }) async {
+    try {
+      reminderError = await reminderScheduler?.synchronize(
+        tasks,
+        requestPermission: requestPermission,
+      );
+    } on Object {
+      reminderError = 'Erinnerungen konnten nicht mit iOS abgeglichen werden. Bitte erneut versuchen.';
+    }
+  }
+
+  Future<void> refreshReminders({bool requestPermission = false}) async {
+    if (!_loaded || reminderScheduler == null) return;
+    final operation = _saveQueue.then((_) async {
+      // Do not schedule changes whose local save failed.
+      if (_storageError == null) {
+        await _syncReminders(
+          List.of(_tasks),
+          requestPermission: requestPermission,
+        );
+      }
+    });
+    _saveQueue = operation.catchError((Object error) {});
+    await operation;
+    notifyListeners();
+  }
+
+  Future<void> openNotificationSettings() async {
+    try {
+      await reminderScheduler?.openSettings();
+    } on Object {
+      reminderError = 'Öffne Einstellungen → Mitteilungen → Routine und aktiviere Mitteilungen erlauben.';
+      notifyListeners();
+    }
+  }
+
   final DateTime Function() _now;
   final List<Task> _tasks = <Task>[];
   final List<TaskCategory> _categories = [];
@@ -173,6 +231,7 @@ class TaskController extends ChangeNotifier {
       _categories
         ..clear()
         ..addAll(data.categories);
+      await _syncReminders(List.of(_tasks));
       _loaded = true;
     } on Object {
       _storageError = 'Tasks could not be loaded from this device.';
@@ -341,7 +400,10 @@ class TaskController extends ChangeNotifier {
   Future<void> _persist() async {
     if (!_loaded) return;
     final data = OrganizerData(List.of(_tasks), List.of(_categories));
-    final operation = _saveQueue.then((_) => repository.saveData(data));
+    final operation = _saveQueue.then((_) async {
+      await repository.saveData(data);
+      await _syncReminders(data.tasks, requestPermission: true);
+    });
     _saveQueue = operation.catchError((Object error) {});
     try {
       await operation;

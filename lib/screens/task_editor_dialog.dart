@@ -179,6 +179,17 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
                 )
               else
                 ..._reminders.map(_buildReminderRow),
+              if (widget.controller.reminderScheduler != null)
+                const Padding(
+                  padding: EdgeInsets.only(top: 8),
+                  child: Text(
+                    'iOS benötigt deine Erlaubnis für Mitteilungen. Beim Speichern der ersten Erinnerung wirst du danach gefragt.',
+                    style: TextStyle(
+                      color: CupertinoColors.secondaryLabel,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
               if (_validationMessage != null) ...<Widget>[
                 const SizedBox(height: 10),
                 Text(
