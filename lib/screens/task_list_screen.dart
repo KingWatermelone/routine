@@ -6,6 +6,7 @@ import '../controllers/task_controller.dart';
 import '../data/task_repository.dart';
 import '../models/task.dart';
 import 'task_editor_dialog.dart';
+import 'category_screen.dart';
 
 class TaskListScreen extends StatefulWidget {
   const TaskListScreen({required this.repository, super.key});
@@ -49,6 +50,16 @@ class _TaskListScreenState extends State<TaskListScreen> {
       backgroundColor: CupertinoColors.systemGroupedBackground,
       navigationBar: CupertinoNavigationBar(
         middle: const Text('Tasks'),
+        leading: CupertinoButton(
+          padding: EdgeInsets.zero,
+          key: const ValueKey('manage-categories'),
+          onPressed: () => Navigator.of(context).push(
+            CupertinoPageRoute<void>(
+              builder: (_) => CategoryScreen(controller: _controller),
+            ),
+          ),
+          child: const Icon(CupertinoIcons.folder),
+        ),
         trailing: CupertinoButton(
           key: const ValueKey<String>('add-task-button'),
           padding: EdgeInsets.zero,
@@ -142,12 +153,15 @@ class _TaskListScreenState extends State<TaskListScreen> {
             leading: Icon(
               selectedCategory == category
                   ? CupertinoIcons.check_mark
-                  : CupertinoIcons.circle,
+                  : _controller.categoryById(category)?.iconData ??
+                        CupertinoIcons.folder,
               size: 16,
-              color: categoryColor(category),
+              color: Color(
+                _controller.categoryById(category)?.color ?? 0xFF8E8E93,
+              ),
             ),
             onPressed: () => _controller.setCategoryFilter(category),
-            child: Text(category),
+            child: Text(_controller.categoryName(category)),
           );
         }),
       ],
@@ -155,7 +169,9 @@ class _TaskListScreenState extends State<TaskListScreen> {
           (BuildContext context, MenuController menuController, Widget? child) {
             return _filterButton(
               key: const ValueKey<String>('category-filter-button'),
-              label: selectedCategory ?? 'All categories',
+              label: selectedCategory == null
+                  ? 'All categories'
+                  : _controller.categoryName(selectedCategory),
               icon: CupertinoIcons.folder,
               onPressed: menuController.isOpen
                   ? menuController.close
@@ -335,7 +351,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
   Widget _buildTaskTile(Task task) {
     final String metadata = <String>[
-      task.category,
+      _controller.categoryName(task.categoryId),
       priorityLabel(task.priority),
       if (task.dueDate != null) formatDateTime(task.dueDate!),
     ].join(' · ');
@@ -370,12 +386,13 @@ class _TaskListScreenState extends State<TaskListScreen> {
         children: <Widget>[
           Row(
             children: <Widget>[
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: categoryColor(task.category),
-                  shape: BoxShape.circle,
+              Icon(
+                _controller.categoryById(task.categoryId)?.iconData ??
+                    CupertinoIcons.folder,
+                size: 14,
+                color: Color(
+                  _controller.categoryById(task.categoryId)?.color ??
+                      0xFF8E8E93,
                 ),
               ),
               const SizedBox(width: 6),
@@ -413,7 +430,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
     final TaskDraft? draft = await showCupertinoDialog<TaskDraft>(
       context: context,
       builder: (BuildContext context) {
-        return TaskEditorDialog(categories: _controller.categories);
+        return TaskEditorDialog(controller: _controller);
       },
     );
     if (draft == null) {
@@ -424,7 +441,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
       await _controller.addTask(
         title: draft.title,
         description: draft.description,
-        category: draft.category,
+        categoryId: draft.category,
         priority: draft.priority,
         dueDate: draft.dueDate,
         reminders: draft.reminders,
@@ -440,7 +457,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
     final TaskDraft? draft = await showCupertinoDialog<TaskDraft>(
       context: context,
       builder: (BuildContext context) {
-        return TaskEditorDialog(categories: _controller.categories, task: task);
+        return TaskEditorDialog(controller: _controller, task: task);
       },
     );
     if (draft == null) {
@@ -452,7 +469,8 @@ class _TaskListScreenState extends State<TaskListScreen> {
         task.copyWith(
           title: draft.title,
           description: draft.description,
-          category: draft.category,
+          categoryId: draft.category,
+          clearCategoryId: draft.category.isEmpty,
           priority: draft.priority,
           dueDate: draft.dueDate,
           clearDueDate: draft.dueDate == null,

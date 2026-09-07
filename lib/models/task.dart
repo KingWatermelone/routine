@@ -11,6 +11,7 @@ class Task {
     required this.updatedAt,
     this.description = '',
     this.category = 'Personal',
+    this.categoryId,
     this.tags = const <String>[],
     this.isCompleted = false,
     this.priority = TaskPriority.normal,
@@ -25,6 +26,8 @@ class Task {
   final String title;
   final String description;
   final String category;
+  // Category names are retained only to decode the legacy v1 format.
+  final String? categoryId;
   final List<String> tags;
   final bool isCompleted;
   final TaskPriority priority;
@@ -40,6 +43,8 @@ class Task {
     String? title,
     String? description,
     String? category,
+    String? categoryId,
+    bool clearCategoryId = false,
     List<String>? tags,
     bool? isCompleted,
     TaskPriority? priority,
@@ -58,6 +63,7 @@ class Task {
       title: title ?? this.title,
       description: description ?? this.description,
       category: category ?? this.category,
+      categoryId: clearCategoryId ? null : categoryId ?? this.categoryId,
       tags: List<String>.unmodifiable(tags ?? this.tags),
       isCompleted: isCompleted ?? this.isCompleted,
       priority: priority ?? this.priority,
@@ -79,6 +85,7 @@ class Task {
       'title': title,
       'description': description,
       'category': category,
+      'categoryId': categoryId,
       'tags': tags,
       'isCompleted': isCompleted,
       'priority': priority.name,
@@ -102,6 +109,7 @@ class Task {
       title: json['title'] as String,
       description: json['description'] as String? ?? '',
       category: json['category'] as String? ?? 'Personal',
+      categoryId: json['categoryId'] as String?,
       tags: _stringList(json['tags']),
       isCompleted: json['isCompleted'] as bool? ?? false,
       priority: _enumByName(

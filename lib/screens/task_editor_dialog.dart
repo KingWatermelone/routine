@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 
 import '../models/task.dart';
+import '../controllers/task_controller.dart';
 
 class TaskDraft {
   const TaskDraft({
@@ -21,9 +22,9 @@ class TaskDraft {
 }
 
 class TaskEditorDialog extends StatefulWidget {
-  const TaskEditorDialog({required this.categories, this.task, super.key});
+  const TaskEditorDialog({required this.controller, this.task, super.key});
 
-  final List<String> categories;
+  final TaskController controller;
   final Task? task;
 
   @override
@@ -44,22 +45,29 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
   @override
   void initState() {
     super.initState();
+    widget.controller.addListener(_refresh);
     final Task? task = widget.task;
     _titleController = TextEditingController(text: task?.title ?? '');
     _descriptionController = TextEditingController(
       text: task?.description ?? '',
     );
-    _category = widget.categories.contains(task?.category)
-        ? task!.category
-        : widget.categories.first;
+    _category = widget.controller.categories.contains(task?.categoryId)
+        ? task!.categoryId!
+        : widget.controller.categories.first;
     _priority = task?.priority ?? TaskPriority.normal;
     _dueDate = task?.dueDate;
     _reminders = List<DateTime>.of(task?.reminders ?? const <DateTime>[])
       ..sort();
   }
 
+  void _refresh() {
+    if (!widget.controller.categories.contains(_category)) _category = '';
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
+    widget.controller.removeListener(_refresh);
     _titleController.dispose();
     _descriptionController.dispose();
     super.dispose();
@@ -213,17 +221,20 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
 
   Widget _buildCategoryMenu() {
     return CupertinoMenuAnchor(
-      menuChildren: widget.categories.map((String category) {
+      menuChildren: widget.controller.categories.map((String category) {
         return CupertinoMenuItem(
           leading: Icon(
             category == _category
                 ? CupertinoIcons.check_mark
-                : CupertinoIcons.circle,
+                : widget.controller.categoryById(category)?.iconData ??
+                      CupertinoIcons.folder,
             size: 16,
-            color: categoryColor(category),
+            color: Color(
+              widget.controller.categoryById(category)?.color ?? 0xFF8E8E93,
+            ),
           ),
           onPressed: () => setState(() => _category = category),
-          child: Text(category),
+          child: Text(widget.controller.categoryName(category)),
         );
       }).toList(),
       builder:
@@ -243,19 +254,31 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: <Widget>[
-                    Row(
-                      children: <Widget>[
-                        Container(
-                          width: 9,
-                          height: 9,
-                          decoration: BoxDecoration(
-                            color: categoryColor(_category),
-                            shape: BoxShape.circle,
+                    Expanded(
+                      child: Row(
+                        children: <Widget>[
+                          Icon(
+                            widget.controller
+                                    .categoryById(_category)
+                                    ?.iconData ??
+                                CupertinoIcons.folder,
+                            size: 16,
+                            color: Color(
+                              widget.controller
+                                      .categoryById(_category)
+                                      ?.color ??
+                                  0xFF8E8E93,
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(_category),
-                      ],
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              widget.controller.categoryName(_category),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                     const Icon(CupertinoIcons.chevron_down, size: 15),
                   ],
@@ -484,15 +507,4 @@ String formatDateTime(DateTime date) {
   String twoDigits(int value) => value.toString().padLeft(2, '0');
   return '${twoDigits(date.day)}.${twoDigits(date.month)}.${date.year} '
       '${twoDigits(date.hour)}:${twoDigits(date.minute)}';
-}
-
-Color categoryColor(String category) {
-  return switch (category) {
-    'Work' => CupertinoColors.systemBlue,
-    'Study' => CupertinoColors.systemPurple,
-    'Home' => CupertinoColors.systemOrange,
-    'Shopping' => CupertinoColors.systemGreen,
-    'Personal' => CupertinoColors.systemPink,
-    _ => CupertinoColors.systemTeal,
-  };
 }
