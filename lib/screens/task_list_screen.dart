@@ -10,9 +10,10 @@ import 'category_screen.dart';
 import '../notifications/reminder_scheduler.dart';
 
 class TaskListScreen extends StatefulWidget {
-  const TaskListScreen({required this.repository, super.key});
+  const TaskListScreen({required this.repository, this.now, super.key});
 
   final TaskRepository repository;
+  final DateTime Function()? now;
 
   @override
   State<TaskListScreen> createState() => _TaskListScreenState();
@@ -21,6 +22,7 @@ class TaskListScreen extends StatefulWidget {
 class _TaskListScreenState extends State<TaskListScreen>
     with WidgetsBindingObserver {
   late final TaskController _controller;
+  Timer? _dateRefreshTimer;
   final TextEditingController _searchController = TextEditingController();
 
   @override
@@ -29,13 +31,16 @@ class _TaskListScreenState extends State<TaskListScreen>
     WidgetsBinding.instance.addObserver(this);
     _controller = TaskController(
       repository: widget.repository,
+      now: widget.now,
       reminderScheduler: IosReminderScheduler.forPlatform(),
     )..addListener(_onControllerChanged);
     unawaited(_controller.load());
+    _startDateRefresh();
   }
 
   @override
   void dispose() {
+    _dateRefreshTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _controller
       ..removeListener(_onControllerChanged)
@@ -46,15 +51,66 @@ class _TaskListScreenState extends State<TaskListScreen>
 
   void _onControllerChanged() {
     if (mounted) {
+      if (_controller.dateFilter == TaskDateFilter.all) {
+        _dateRefreshTimer?.cancel();
+      } else if (_dateRefreshTimer?.isActive != true &&
+          (WidgetsBinding.instance.lifecycleState == null ||
+              WidgetsBinding.instance.lifecycleState ==
+                  AppLifecycleState.resumed)) {
+        _startDateRefresh();
+      }
       setState(() {});
     }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed)
+    if (state == AppLifecycleState.resumed) {
+      _controller.refreshDateFilters();
+      _startDateRefresh();
       unawaited(_controller.refreshReminders());
+    } else {
+      _dateRefreshTimer?.cancel();
+    }
   }
+
+  void _startDateRefresh() {
+    _dateRefreshTimer?.cancel();
+    if (_controller.dateFilter == TaskDateFilter.all) return;
+    _dateRefreshTimer = Timer.periodic(
+      const Duration(minutes: 1),
+      (_) => _controller.refreshDateFilters(),
+    );
+  }
+
+  String _dateLabel(TaskDateFilter filter) => switch (filter) {
+    TaskDateFilter.all => 'Alle Termine',
+    TaskDateFilter.today => 'Heute',
+    TaskDateFilter.upcoming => 'Demnächst',
+    TaskDateFilter.overdue => 'Überfällig',
+  };
+
+  Widget _buildDateFilter() => CupertinoMenuAnchor(
+    menuChildren: [
+      for (final filter in TaskDateFilter.values)
+        CupertinoMenuItem(
+          onPressed: () => _controller.setDateFilter(filter),
+          leading: Icon(
+            filter == _controller.dateFilter
+                ? CupertinoIcons.check_mark
+                : CupertinoIcons.calendar,
+            size: 16,
+          ),
+          child: Text(_dateLabel(filter)),
+        ),
+    ],
+    builder: (context, menu, child) => _filterButton(
+      key: const ValueKey('date-filter-button'),
+      label: _dateLabel(_controller.dateFilter),
+      icon: CupertinoIcons.calendar,
+      onPressed: menu.isOpen ? menu.close : menu.open,
+    ),
+  );
 
   Widget _reminderStatus() => Padding(
     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -159,6 +215,8 @@ class _TaskListScreenState extends State<TaskListScreen>
               },
             ),
           ),
+          const SizedBox(height: 10),
+          SizedBox(width: double.infinity, child: _buildDateFilter()),
           const SizedBox(height: 10),
           Row(
             children: <Widget>[
@@ -372,6 +430,9 @@ class _TaskListScreenState extends State<TaskListScreen>
   }
 
   String _emptyMessage() {
+    if (_controller.dateFilter != TaskDateFilter.all) {
+      return 'Keine passenden Aufgaben für „${_dateLabel(_controller.dateFilter)}“.';
+    }
     return switch (_controller.statusFilter) {
       TaskStatusFilter.open => 'No open tasks',
       TaskStatusFilter.completed => 'No completed tasks',
@@ -380,6 +441,9 @@ class _TaskListScreenState extends State<TaskListScreen>
   }
 
   String _sectionTitle() {
+    if (_controller.dateFilter != TaskDateFilter.all) {
+      return '${_dateLabel(_controller.dateFilter)} · ${_controller.statusFilter.name}';
+    }
     return switch (_controller.statusFilter) {
       TaskStatusFilter.open => 'OPEN TASKS',
       TaskStatusFilter.completed => 'COMPLETED TASKS',

@@ -12,6 +12,28 @@ MVP focuses on an offline-first to-do list.
 - Preserve source and related-item fields for future organizer modules
 - Validate empty titles and reminders that occur after a due date
 
+## Date views
+
+Use the date dropdown below the status selector:
+- **Alle Termine**: all due dates, including tasks without a due date (default).
+- **Heute**: due on the current local calendar day, including earlier today.
+- **Demnächst**: due from tomorrow's local midnight onward.
+- **Überfällig**: open tasks with a due time strictly earlier than now.
+
+Date filtering combines with status, category, priority and search. Completed
+tasks can be inspected by due date too, but never count as overdue. Tasks without
+a due date appear only in Alle Termine. Existing due-date ordering is preserved.
+Calendar boundaries account for local days rather than assuming 24-hour days.
+While foregrounded the list refreshes every minute; on resume it refreshes
+immediately, so day/time-zone changes are reflected without restarting. Filters
+are session-only and do not change task data or the notification schedule.
+
+Date-view validation: added controller boundary/combination/rollover tests and
+320/1100px widget tests. Dart formatting/parsing and diff checks were completed;
+Flutter analyzer/tests remain unexecuted due to the previously documented
+bootstrap security stop. Manually check date dropdowns and combining filters,
+including tasks before/at midnight and tasks without dates, before merging.
+
 ## Custom categories
 
 Open the folder button at the top left of Tasks to create, rename, recolor,

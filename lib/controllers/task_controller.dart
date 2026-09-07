@@ -10,6 +10,8 @@ import '../notifications/reminder_scheduler.dart';
 
 enum TaskStatusFilter { open, completed, all }
 
+enum TaskDateFilter { all, today, upcoming, overdue }
+
 class TaskValidationException implements Exception {
   const TaskValidationException(this.message);
 
@@ -173,6 +175,15 @@ class TaskController extends ChangeNotifier {
   TaskStatusFilter _statusFilter = TaskStatusFilter.open;
   String? _categoryFilter;
   TaskPriority? _priorityFilter;
+  TaskDateFilter _dateFilter = TaskDateFilter.all;
+  TaskDateFilter get dateFilter => _dateFilter;
+  void setDateFilter(TaskDateFilter filter) {
+    if (_dateFilter == filter) return;
+    _dateFilter = filter;
+    notifyListeners();
+  }
+
+  void refreshDateFilters() => notifyListeners();
 
   bool get isLoading => _isLoading;
   String? get storageError => _storageError;
@@ -187,6 +198,10 @@ class TaskController extends ChangeNotifier {
   }
 
   List<Task> get visibleTasks {
+    final now = _now().toLocal();
+    final today = DateTime(now.year, now.month, now.day);
+    // Construct calendar boundaries instead of adding 24 hours (DST days differ).
+    final tomorrow = DateTime(now.year, now.month, now.day + 1);
     final String normalizedQuery = _searchQuery.trim().toLowerCase();
     final List<Task> result = _tasks.where((Task task) {
       final bool matchesStatus = switch (_statusFilter) {
@@ -197,6 +212,15 @@ class TaskController extends ChangeNotifier {
 
       final bool matchesCategory =
           _categoryFilter == null || (task.categoryId ?? '') == _categoryFilter;
+      final due = task.dueDate?.toLocal();
+      final matchesDate = switch (_dateFilter) {
+        TaskDateFilter.all => true,
+        TaskDateFilter.today =>
+          due != null && !due.isBefore(today) && due.isBefore(tomorrow),
+        TaskDateFilter.upcoming => due != null && !due.isBefore(tomorrow),
+        TaskDateFilter.overdue =>
+          due != null && due.isBefore(now) && !task.isCompleted,
+      };
       final bool matchesPriority =
           _priorityFilter == null || task.priority == _priorityFilter;
       final bool matchesSearch =
@@ -208,6 +232,7 @@ class TaskController extends ChangeNotifier {
           );
 
       return matchesStatus &&
+          matchesDate &&
           matchesCategory &&
           matchesPriority &&
           matchesSearch;
