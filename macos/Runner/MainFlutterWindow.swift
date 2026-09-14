@@ -12,18 +12,21 @@ class MainFlutterWindow: NSWindow, UNUserNotificationCenterDelegate {
     self.setFrame(windowFrame, display: true)
 
     RegisterGeneratedPlugins(registry: flutterViewController)
-    configureReminderChannel(
-      binaryMessenger: flutterViewController.engine.binaryMessenger
-    )
+    configureReminderChannel(flutterViewController: flutterViewController)
     UNUserNotificationCenter.current().delegate = self
 
     super.awakeFromNib()
   }
 
-  private func configureReminderChannel(binaryMessenger: FlutterBinaryMessenger) {
+  private func configureReminderChannel(
+    flutterViewController: FlutterViewController
+  ) {
+    let registrar = flutterViewController.registrar(
+      forPlugin: "RoutineReminders"
+    )
     let channel = FlutterMethodChannel(
       name: "routine/reminders",
-      binaryMessenger: binaryMessenger
+      binaryMessenger: registrar.messenger
     )
     reminderChannel = channel
     channel.setMethodCallHandler { call, result in
