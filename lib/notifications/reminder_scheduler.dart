@@ -11,17 +11,22 @@ abstract interface class ReminderScheduler {
   Future<void> openSettings();
 }
 
-class IosReminderScheduler implements ReminderScheduler {
-  IosReminderScheduler({MethodChannel? channel, DateTime Function()? now})
+class AppleReminderScheduler implements ReminderScheduler {
+  AppleReminderScheduler({MethodChannel? channel, DateTime Function()? now})
     : _channel = channel ?? const MethodChannel('routine/reminders'),
       _now = now ?? DateTime.now;
+
   final MethodChannel _channel;
   final DateTime Function() _now;
 
-  static ReminderScheduler? forPlatform() =>
-      !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS
-      ? IosReminderScheduler()
-      : null;
+  static ReminderScheduler? forPlatform() {
+    if (kIsWeb) return null;
+    if (defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.macOS) {
+      return AppleReminderScheduler();
+    }
+    return null;
+  }
 
   @override
   Future<String?> synchronize(

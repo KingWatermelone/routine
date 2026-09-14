@@ -183,7 +183,7 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
                 const Padding(
                   padding: EdgeInsets.only(top: 8),
                   child: Text(
-                    'iOS benötigt deine Erlaubnis für Mitteilungen. Beim Speichern der ersten Erinnerung wirst du danach gefragt.',
+                    'iOS oder macOS benötigt deine Erlaubnis für Mitteilungen. Beim Speichern der ersten Erinnerung wirst du danach gefragt.',
                     style: TextStyle(
                       color: CupertinoColors.secondaryLabel,
                       fontSize: 13,

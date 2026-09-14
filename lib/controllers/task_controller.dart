@@ -54,7 +54,7 @@ class TaskController extends ChangeNotifier {
         requestPermission: requestPermission,
       );
     } on Object {
-      reminderError = 'Erinnerungen konnten nicht mit iOS abgeglichen werden. Bitte erneut versuchen.';
+      reminderError = 'Erinnerungen konnten nicht mit dem Betriebssystem abgeglichen werden. Bitte erneut versuchen.';
     }
   }
 
@@ -78,7 +78,7 @@ class TaskController extends ChangeNotifier {
     try {
       await reminderScheduler?.openSettings();
     } on Object {
-      reminderError = 'Öffne Einstellungen → Mitteilungen → Routine und aktiviere Mitteilungen erlauben.';
+      reminderError = 'Öffne die Systemeinstellungen → Mitteilungen → Routine und erlaube Mitteilungen.';
       notifyListeners();
     }
   }
