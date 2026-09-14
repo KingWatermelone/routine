@@ -62,8 +62,9 @@ record. Storage failures are displayed; the category screen offers a retry.
 This remains SharedPreferences-based local storage, not a transactional database
 or a cloud backup.
 
-iOS local notifications are implemented in the iOS-reminders branch; other
-platforms still only store reminder times. Cursor styling is unchanged.
+iOS local notifications are available on `main`. This branch adds the same
+native scheduling behavior for macOS. Windows still only stores reminder times.
+Cursor styling is unchanged.
 
 ## iOS reminders
 
@@ -96,8 +97,8 @@ navigation to a specific task and notification action buttons are not included.
 
 ### Test on iPhone (Mac and Xcode required)
 
-1. Check out `codex/ios-reminders`, run `flutter pub get`, `flutter analyze`,
-   and `flutter test` on your Mac.
+1. Check out `main`, run `flutter pub get`, `flutter analyze`, and
+   `flutter test` on your Mac.
 2. Open `ios/Runner.xcworkspace` in Xcode, select your development team and a
    unique bundle identifier under Signing & Capabilities, then select your iPhone.
    No Push Notifications entitlement or background mode is needed for local requests.
@@ -114,15 +115,48 @@ navigation to a specific task and notification action buttons are not included.
    visible limit warning with more than 64 future reminders.
 7. Run the RunnerTests scheme tests in Xcode for native request validation.
 
-Validation here: Dart formatting/parsing and `git diff --check` only. Flutter
-bootstrap remains blocked by the earlier environment security review; the new
-Dart tests were not executed. Xcode/Swift compilation, XCTest and iPhone delivery
-tests require a Mac/iPhone and have not been performed. Do not merge as verified
-until those checks pass.
+The integrated iOS version was built and tested locally, including delivery on
+an iPhone. The simulator-only haptic and keyboard diagnostics observed during
+that check did not correspond to functional failures.
 
 Implementation references: [Apple local scheduling](https://developer.apple.com/documentation/usernotifications/scheduling-a-notification-locally-from-your-app),
 [notification authorization](https://developer.apple.com/documentation/usernotifications/asking-permission-to-use-notifications),
 and [Flutter platform channels](https://docs.flutter.dev/platform-integration/platform-channels).
+
+## macOS reminders
+
+The macOS runner exposes the same `routine/reminders` method channel as iOS and
+uses Apple's UserNotifications framework without another Dart dependency. Future
+reminders for open tasks are reconciled after successful saves, launch, and
+resume. Editing, completing, or deleting a task removes obsolete requests.
+Permission and scheduling errors remain separate from storage failures.
+
+The app requests notification permission only when a user saves a future
+reminder. Foreground reminders request a banner, sound, and Notification Center
+entry. The settings action opens the Notifications pane when macOS accepts the
+deep link and otherwise falls back to opening System Settings. Delivery remains
+subject to the user's macOS notification, Focus, banner, and sound settings.
+
+### Test on macOS
+
+1. Check out `codex/macos-reminders` and run `flutter clean`,
+   `flutter pub get`, `flutter analyze`, and `flutter test`.
+2. Run `flutter run -d macos`. Create a task due in ten minutes with two future
+   reminders and allow notifications when macOS asks.
+3. Verify one reminder while Routine is foregrounded and another after fully
+   quitting Routine. Confirm that the task title, banner, and sound are correct.
+4. Change a task title and reminder time. Verify the old request does not fire.
+   Complete and delete tasks before their reminders and verify cancellation.
+5. Disable notifications under System Settings → Notifications → Routine.
+   Verify the visible explanation and settings button, then re-enable them and
+   retry scheduling.
+6. Close and reopen Routine and verify that persisted reminders are reconciled
+   without replaying past reminders.
+7. Open `macos/Runner.xcworkspace` in Xcode and run the RunnerTests target.
+
+This implementation environment has no available macOS/Flutter runtime, so
+`flutter analyze`, `flutter test`, the macOS build, XCTest, and notification
+delivery must be executed locally before merging this branch.
 
 ### Manual category check
 
@@ -148,8 +182,6 @@ flutter analyze
 flutter test
 ```
 
-Verification for the custom-category change: Dart formatting/parsing and
-`git diff --check` completed. `flutter analyze`, `flutter test`, and native/browser
-runtime checks were not completed in the implementation environment: Flutter
-tool bootstrap was stopped by a security check after an unexpected request to a
-cloud metadata endpoint. The added tests must be run locally before merging.
+The category, date-view, and iOS-reminder changes were subsequently validated
+locally before integration. Platform-specific checks for new changes are listed
+in their sections above.
