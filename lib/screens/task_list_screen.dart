@@ -32,7 +32,7 @@ class _TaskListScreenState extends State<TaskListScreen>
     _controller = TaskController(
       repository: widget.repository,
       now: widget.now,
-      reminderScheduler: IosReminderScheduler.forPlatform(),
+      reminderScheduler: AppleReminderScheduler.forPlatform(),
     )..addListener(_onControllerChanged);
     unawaited(_controller.load());
     _startDateRefresh();
@@ -129,7 +129,7 @@ class _TaskListScreenState extends State<TaskListScreen>
             ),
             CupertinoButton(
               onPressed: _controller.openNotificationSettings,
-              child: const Text('iOS-Einstellungen'),
+              child: const Text('Mitteilungseinstellungen'),
             ),
           ],
         ),
