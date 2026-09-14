@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:routine/controllers/task_controller.dart';
@@ -38,6 +39,21 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final now = DateTime.utc(2026, 9, 7, 12);
   const channel = MethodChannel('routine/reminders-test');
+
+  test('platform factory enables iOS and macOS only', () {
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    expect(AppleReminderScheduler.forPlatform(), isA<AppleReminderScheduler>());
+
+    debugDefaultTargetPlatformOverride = null;
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    expect(AppleReminderScheduler.forPlatform(), isA<AppleReminderScheduler>());
+
+    debugDefaultTargetPlatformOverride = null;
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    expect(AppleReminderScheduler.forPlatform(), isNull);
+  });
 
   test('failed save keeps the last persisted notification state', () async {
     final repo = FailingRepository();
@@ -98,7 +114,7 @@ void main() {
         updatedAt: now,
         reminders: [now.subtract(const Duration(minutes: 1)), time, time],
       );
-      final scheduler = IosReminderScheduler(channel: channel, now: () => now);
+      final scheduler = AppleReminderScheduler(channel: channel, now: () => now);
       await scheduler.synchronize([
         task,
         task.copyWith(isCompleted: true),
