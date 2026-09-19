@@ -138,6 +138,10 @@ void main() {
   }
 
   testWidgets('a tag can be removed while editing a task', (tester) async {
+    tester.view.physicalSize = const Size(1100, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     final repository = MemoryTaskRepository(
       initialTasks: <Task>[
         Task(
@@ -155,7 +159,13 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Tagged task'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('remove-task-tag-Temporary')));
+    final removeButton = find.byKey(
+      const ValueKey('remove-task-tag-Temporary'),
+    );
+    await tester.ensureVisible(removeButton);
+    await tester.pumpAndSettle();
+    await tester.tap(removeButton);
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('save-task-button')));
     await tester.pumpAndSettle();
 
