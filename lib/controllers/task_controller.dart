@@ -483,10 +483,11 @@ class TaskController extends ChangeNotifier {
   Future<void> retrySave() => _persist();
 
   void _ensureLoaded() {
-    if (!_loaded)
+    if (!_loaded) {
       throw const TaskValidationException(
         'Daten konnten noch nicht geladen werden.',
       );
+    }
   }
 
   void _validateCategory(String? id) {
