@@ -62,9 +62,8 @@ record. Storage failures are displayed; the category screen offers a retry.
 This remains SharedPreferences-based local storage, not a transactional database
 or a cloud backup.
 
-iOS local notifications are available on `main`. This branch adds the same
-native scheduling behavior for macOS. Windows still only stores reminder times.
-Cursor styling is unchanged.
+iOS and macOS local notifications are available on `main`. This branch adds the
+same persisted-reminder reconciliation for Windows. Cursor styling is unchanged.
 
 ## iOS reminders
 
@@ -154,9 +153,54 @@ subject to the user's macOS notification, Focus, banner, and sound settings.
    without replaying past reminders.
 7. Open `macos/Runner.xcworkspace` in Xcode and run the RunnerTests target.
 
-This implementation environment has no available macOS/Flutter runtime, so
-`flutter analyze`, `flutter test`, the macOS build, XCTest, and notification
-delivery must be executed locally before merging this branch.
+The macOS implementation was subsequently analyzed, tested, built, and checked
+manually before PR #7 was merged.
+
+## Windows reminders
+
+Windows uses `flutter_local_notifications_windows` through its native FFI
+implementation. The Dart scheduler keeps the task model and storage format
+unchanged, selects only open tasks' future reminders, removes obsolete Routine
+requests, and schedules the nearest 64. Completing/deleting a task, changing a
+title/time, removing a reminder, launching the app, or resuming it triggers the
+same reconciliation used on Apple platforms.
+
+Routine reserves notification IDs from `0x40000000` through `0x7fffffff` for
+task reminders. Requests outside that range are preserved for future modules.
+Task ID and reminder time produce a stable ID, while an in-memory collision
+check prevents two current reminders from sharing one. Times are sent to
+Windows as absolute UTC instants.
+
+Windows does not show an app permission prompt. Routine checks the native toast
+setting after initialization; if notifications are disabled it removes pending
+Routine requests and displays instructions plus a button that opens Windows
+notification settings. Scheduled requests can be inspected and cancelled in an
+ordinary debug build. Removing an already delivered toast from Notification
+Center requires package identity (for example an MSIX build) and is outside the
+MVP cancellation requirement for outstanding reminders.
+
+### Test on Windows
+
+1. Install Flutter 3.47 or newer with Windows desktop support, Visual Studio
+   2022 and the **Desktop development with C++** workload.
+2. Check out `codex/windows-reminders`, then run `flutter clean`,
+   `flutter pub get`, `flutter analyze`, and `flutter test`.
+3. Run `flutter run -d windows`. Create a task due in ten minutes with two
+   future reminders, close Routine, and verify the notifications arrive with
+   the task title.
+4. Edit a title and reminder time. Verify the old request does not fire.
+   Complete and delete tasks before their reminders and verify cancellation,
+   including after restarting Routine.
+5. Disable Routine under Settings → System → Notifications. Save a future
+   reminder, verify the visible explanation, use its settings button, enable
+   notifications, return to Routine, and retry.
+6. Verify past and duplicate reminder times are ignored and more than 64 future
+   reminders show the capacity warning while the nearest 64 are scheduled.
+
+The current implementation environment has no usable Flutter toolchain or
+Windows runtime. Dart formatting and diff checks completed successfully, but
+`flutter analyze`, `flutter test`, the C++ runner build, and live notification
+delivery therefore require the local checks above before merge.
 
 ### Manual category check
 
@@ -182,6 +226,6 @@ flutter analyze
 flutter test
 ```
 
-The category, date-view, and iOS-reminder changes were subsequently validated
+The category, date-view, iOS-reminder, and macOS-reminder changes were validated
 locally before integration. Platform-specific checks for new changes are listed
 in their sections above.

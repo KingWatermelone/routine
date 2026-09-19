@@ -1,5 +1,9 @@
 #include "flutter_window.h"
 
+#include <flutter/standard_method_codec.h>
+#include <shellapi.h>
+#include <winrt/Windows.UI.Notifications.h>
+
 #include <optional>
 
 #include "flutter/generated_plugin_registrant.h"
@@ -25,6 +29,44 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+  reminder_channel_ =
+      std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+          flutter_controller_->engine()->messenger(), "routine/reminders",
+          &flutter::StandardMethodCodec::GetInstance());
+  reminder_channel_->SetMethodCallHandler(
+      [](const flutter::MethodCall<flutter::EncodableValue>& call,
+         std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
+             result) {
+        if (call.method_name() == "notificationsEnabled") {
+          try {
+            const auto notifier = winrt::Windows::UI::Notifications::
+                ToastNotificationManager::CreateToastNotifier(
+                    L"KingWatermelone.Routine");
+            const bool enabled =
+                notifier.Setting() ==
+                winrt::Windows::UI::Notifications::NotificationSetting::
+                    Enabled;
+            result->Success(flutter::EncodableValue(enabled));
+          } catch (const winrt::hresult_error& error) {
+            result->Error("settings", winrt::to_string(error.message()));
+          }
+          return;
+        }
+
+        if (call.method_name() != "openSettings") {
+          result->NotImplemented();
+          return;
+        }
+
+        const auto launch_result = reinterpret_cast<INT_PTR>(ShellExecuteW(
+            nullptr, L"open", L"ms-settings:notifications", nullptr, nullptr,
+            SW_SHOWNORMAL));
+        if (launch_result > 32) {
+          result->Success();
+        } else {
+          result->Error("settings", "Notification settings unavailable");
+        }
+      });
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
@@ -40,6 +82,7 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  reminder_channel_.reset();
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }
