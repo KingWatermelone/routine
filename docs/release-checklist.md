@@ -45,8 +45,12 @@ flutter test
 
 ## 3. Bestandsdaten und Offlinebetrieb
 
-- [ ] Vor dem Update mit der vorherigen Version mehrere Aufgaben sowie eine nicht
-      standardmäßige Kategorie speichern.
+- [ ] Die vorherige Version mit derselben endgültigen Bundle-ID
+      `com.kingwatermelone.routine` installieren. Eine abweichende Bundle-ID
+      erzeugt technisch eine zweite App mit eigenem Speicher und ist deshalb
+      kein gültiger Migrationstest.
+- [ ] Vor dem Update mehrere Aufgaben sowie eine nicht standardmäßige Kategorie
+      speichern.
 - [ ] Auf 0.1.0 aktualisieren und prüfen, dass Inhalte und Zuordnungen erhalten sind.
 - [ ] App zweimal neu starten; die Migration wird nicht erneut ausgeführt.
 - [ ] Netzwerk deaktivieren; Erstellen, Bearbeiten, Filtern und Neustarten bleiben
