@@ -12,6 +12,8 @@ enum TaskStatusFilter { open, completed, all }
 
 enum TaskDateFilter { all, today, upcoming, overdue }
 
+enum TaskSort { dueDate, priority, category, status, createdAt }
+
 class TaskValidationException implements Exception {
   const TaskValidationException(this.message);
 
@@ -175,8 +177,11 @@ class TaskController extends ChangeNotifier {
   TaskStatusFilter _statusFilter = TaskStatusFilter.open;
   String? _categoryFilter;
   TaskPriority? _priorityFilter;
+  String? _tagFilter;
   TaskDateFilter _dateFilter = TaskDateFilter.all;
+  TaskSort _sort = TaskSort.dueDate;
   TaskDateFilter get dateFilter => _dateFilter;
+  TaskSort get sort => _sort;
   void setDateFilter(TaskDateFilter filter) {
     if (_dateFilter == filter) return;
     _dateFilter = filter;
@@ -191,10 +196,25 @@ class TaskController extends ChangeNotifier {
   TaskStatusFilter get statusFilter => _statusFilter;
   String? get categoryFilter => _categoryFilter;
   TaskPriority? get priorityFilter => _priorityFilter;
+  String? get tagFilter => _tagFilter;
   List<Task> get tasks => List<Task>.unmodifiable(_tasks);
 
   List<String> get categories {
     return ['', ..._categories.map((category) => category.id)];
+  }
+
+  List<String> get tags {
+    final tagsByName = <String, String>{};
+    for (final task in _tasks) {
+      for (final tag in task.tags) {
+        tagsByName.putIfAbsent(tag.toLowerCase(), () => tag);
+      }
+    }
+    final result = tagsByName.values.toList()
+      ..sort(
+        (first, second) => first.toLowerCase().compareTo(second.toLowerCase()),
+      );
+    return result;
   }
 
   List<Task> get visibleTasks {
@@ -223,6 +243,11 @@ class TaskController extends ChangeNotifier {
       };
       final bool matchesPriority =
           _priorityFilter == null || task.priority == _priorityFilter;
+      final bool matchesTag =
+          _tagFilter == null ||
+          task.tags.any(
+            (tag) => tag.toLowerCase() == _tagFilter!.toLowerCase(),
+          );
       final bool matchesSearch =
           normalizedQuery.isEmpty ||
           task.title.toLowerCase().contains(normalizedQuery) ||
@@ -235,6 +260,7 @@ class TaskController extends ChangeNotifier {
           matchesDate &&
           matchesCategory &&
           matchesPriority &&
+          matchesTag &&
           matchesSearch;
     }).toList();
 
@@ -295,6 +321,20 @@ class TaskController extends ChangeNotifier {
       return;
     }
     _priorityFilter = priority;
+    notifyListeners();
+  }
+
+  void setTagFilter(String? tag) {
+    final normalized = tag?.trim();
+    final value = normalized == null || normalized.isEmpty ? null : normalized;
+    if (_tagFilter == value) return;
+    _tagFilter = value;
+    notifyListeners();
+  }
+
+  void setSort(TaskSort sort) {
+    if (_sort == sort) return;
+    _sort = sort;
     notifyListeners();
   }
 
@@ -468,7 +508,31 @@ class TaskController extends ChangeNotifier {
     return id;
   }
 
-  static int _compareTasks(Task first, Task second) {
+  int _compareTasks(Task first, Task second) {
+    final primaryOrder = switch (_sort) {
+      TaskSort.dueDate => _compareDueDates(first, second),
+      TaskSort.priority => second.priority.index.compareTo(
+        first.priority.index,
+      ),
+      TaskSort.category => _compareCategories(first, second),
+      TaskSort.status => _compareStatus(first, second),
+      TaskSort.createdAt => second.createdAt.compareTo(first.createdAt),
+    };
+    if (primaryOrder != 0) return primaryOrder;
+
+    final dueDateOrder = _compareDueDates(first, second);
+    if (dueDateOrder != 0) return dueDateOrder;
+    final priorityOrder = second.priority.index.compareTo(first.priority.index);
+    if (priorityOrder != 0) return priorityOrder;
+    final createdOrder = second.createdAt.compareTo(first.createdAt);
+    if (createdOrder != 0) return createdOrder;
+    final titleOrder = first.title.toLowerCase().compareTo(
+      second.title.toLowerCase(),
+    );
+    return titleOrder != 0 ? titleOrder : first.id.compareTo(second.id);
+  }
+
+  static int _compareDueDates(Task first, Task second) {
     final DateTime? firstDueDate = first.dueDate;
     final DateTime? secondDueDate = second.dueDate;
     if (firstDueDate != null && secondDueDate != null) {
@@ -482,12 +546,19 @@ class TaskController extends ChangeNotifier {
       return 1;
     }
 
-    final int priorityOrder = second.priority.index.compareTo(
-      first.priority.index,
-    );
-    if (priorityOrder != 0) {
-      return priorityOrder;
-    }
-    return second.createdAt.compareTo(first.createdAt);
+    return 0;
+  }
+
+  int _compareCategories(Task first, Task second) {
+    if (first.categoryId == null && second.categoryId != null) return 1;
+    if (first.categoryId != null && second.categoryId == null) return -1;
+    return categoryName(first.categoryId)
+        .toLowerCase()
+        .compareTo(categoryName(second.categoryId).toLowerCase());
+  }
+
+  static int _compareStatus(Task first, Task second) {
+    if (first.isCompleted == second.isCompleted) return 0;
+    return first.isCompleted ? 1 : -1;
   }
 }

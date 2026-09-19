@@ -12,7 +12,7 @@ class Task {
     this.description = '',
     this.category = 'Personal',
     this.categoryId,
-    this.tags = const <String>[],
+    List<String> tags = const <String>[],
     this.isCompleted = false,
     this.priority = TaskPriority.normal,
     this.dueDate,
@@ -20,7 +20,7 @@ class Task {
     this.completedAt,
     this.source = TaskSource.manual,
     this.relatedItemId,
-  });
+  }) : tags = List<String>.unmodifiable(_normalizeTags(tags));
 
   final String id;
   final String title;
@@ -150,7 +150,7 @@ class Task {
     if (value is! List<Object?>) {
       return const <String>[];
     }
-    return value.whereType<String>().toList(growable: false);
+    return _normalizeTags(value.whereType<String>());
   }
 
   static T _enumByName<T extends Enum>(
@@ -165,4 +165,15 @@ class Task {
     }
     return fallback;
   }
+}
+
+List<String> _normalizeTags(Iterable<String> tags) {
+  final normalized = <String>[];
+  final names = <String>{};
+  for (final tag in tags) {
+    final trimmed = tag.trim();
+    if (trimmed.isEmpty || !names.add(trimmed.toLowerCase())) continue;
+    normalized.add(trimmed);
+  }
+  return normalized;
 }

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/cupertino.dart';
 
 import '../models/task.dart';
@@ -8,6 +10,7 @@ class TaskDraft {
     required this.title,
     required this.description,
     required this.category,
+    required this.tags,
     required this.priority,
     required this.dueDate,
     required this.reminders,
@@ -16,6 +19,7 @@ class TaskDraft {
   final String title;
   final String description;
   final String category;
+  final List<String> tags;
   final TaskPriority priority;
   final DateTime? dueDate;
   final List<DateTime> reminders;
@@ -34,7 +38,9 @@ class TaskEditorDialog extends StatefulWidget {
 class _TaskEditorDialogState extends State<TaskEditorDialog> {
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
+  late final TextEditingController _tagController;
   late String _category;
+  late List<String> _tags;
   late TaskPriority _priority;
   late DateTime? _dueDate;
   late List<DateTime> _reminders;
@@ -51,10 +57,12 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
     _descriptionController = TextEditingController(
       text: task?.description ?? '',
     );
+    _tagController = TextEditingController();
     _category = widget.controller.categories.contains(task?.categoryId)
         ? task!.categoryId!
         : widget.controller.categories.first;
     _priority = task?.priority ?? TaskPriority.normal;
+    _tags = List<String>.of(task?.tags ?? const <String>[]);
     _dueDate = task?.dueDate;
     _reminders = List<DateTime>.of(task?.reminders ?? const <DateTime>[])
       ..sort();
@@ -70,6 +78,7 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
     widget.controller.removeListener(_refresh);
     _titleController.dispose();
     _descriptionController.dispose();
+    _tagController.dispose();
     super.dispose();
   }
 
@@ -78,7 +87,7 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
     return CupertinoAlertDialog(
       title: Text(_isEditing ? 'Edit Task' : 'New Task'),
       content: SizedBox(
-        height: 430,
+        height: math.min(520, MediaQuery.sizeOf(context).height * 0.62),
         child: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -121,6 +130,60 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
               _fieldLabel('Category'),
               const SizedBox(height: 8),
               _buildCategoryMenu(),
+              const SizedBox(height: 16),
+              _fieldLabel('Tags'),
+              const SizedBox(height: 8),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final field = CupertinoTextField(
+                    key: const ValueKey<String>('task-tag-field'),
+                    controller: _tagController,
+                    placeholder: 'Tag hinzufügen',
+                    textInputAction: TextInputAction.done,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    onChanged: (_) => _clearValidationMessage(),
+                    onSubmitted: (_) => _addTag(),
+                  );
+                  final button = CupertinoButton(
+                    key: const ValueKey<String>('add-tag-button'),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 9,
+                    ),
+                    color: CupertinoColors.tertiarySystemFill,
+                    onPressed: _addTag,
+                    child: const Text('Hinzufügen'),
+                  );
+                  if (constraints.maxWidth < 330) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        field,
+                        const SizedBox(height: 8),
+                        button,
+                      ],
+                    );
+                  }
+                  return Row(
+                    children: <Widget>[
+                      Expanded(child: field),
+                      const SizedBox(width: 8),
+                      button,
+                    ],
+                  );
+                },
+              ),
+              if (_tags.isNotEmpty) ...<Widget>[
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: _tags.map(_buildTag).toList(growable: false),
+                ),
+              ],
               const SizedBox(height: 16),
               _fieldLabel('Priority'),
               const SizedBox(height: 8),
@@ -342,6 +405,29 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
     );
   }
 
+  Widget _buildTag(String tag) {
+    return Container(
+      key: ValueKey<String>('task-tag-$tag'),
+      padding: const EdgeInsets.only(left: 9),
+      decoration: BoxDecoration(
+        color: CupertinoColors.tertiarySystemFill,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Text('#$tag', style: const TextStyle(fontSize: 13)),
+          CupertinoButton(
+            key: ValueKey<String>('remove-task-tag-$tag'),
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            onPressed: () => setState(() => _tags.remove(tag)),
+            child: const Icon(CupertinoIcons.clear, size: 13),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildReminderRow(DateTime reminder) {
     return Row(
       children: <Widget>[
@@ -436,6 +522,25 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
     setState(() => _validationMessage = null);
   }
 
+  void _addTag() {
+    final tag = _tagController.text.trim();
+    if (tag.isEmpty) {
+      setState(() => _validationMessage = 'Bitte ein Tag eingeben.');
+      return;
+    }
+    if (_tags.any((existing) => existing.toLowerCase() == tag.toLowerCase())) {
+      setState(() {
+        _validationMessage = 'Dieses Tag wurde bereits hinzugefügt.';
+      });
+      return;
+    }
+    setState(() {
+      _tags.add(tag);
+      _tagController.clear();
+      _validationMessage = null;
+    });
+  }
+
   void _submit() {
     final String title = _titleController.text.trim();
     if (title.isEmpty) {
@@ -451,11 +556,21 @@ class _TaskEditorDialogState extends State<TaskEditorDialog> {
       return;
     }
 
+    final tags = List<String>.of(_tags);
+    final pendingTag = _tagController.text.trim();
+    if (pendingTag.isNotEmpty &&
+        !tags.any(
+          (existing) => existing.toLowerCase() == pendingTag.toLowerCase(),
+        )) {
+      tags.add(pendingTag);
+    }
+
     Navigator.of(context).pop(
       TaskDraft(
         title: title,
         description: _descriptionController.text.trim(),
         category: _category,
+        tags: List<String>.unmodifiable(tags),
         priority: _priority,
         dueDate: _dueDate,
         reminders: List<DateTime>.unmodifiable(_reminders),
