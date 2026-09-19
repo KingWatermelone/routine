@@ -32,7 +32,7 @@ class _TaskListScreenState extends State<TaskListScreen>
     _controller = TaskController(
       repository: widget.repository,
       now: widget.now,
-      reminderScheduler: AppleReminderScheduler.forPlatform(),
+      reminderScheduler: reminderSchedulerForPlatform(),
     )..addListener(_onControllerChanged);
     unawaited(_controller.load());
     _startDateRefresh();
