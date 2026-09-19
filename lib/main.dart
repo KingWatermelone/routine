@@ -13,7 +13,7 @@ class PersonalOrganizerApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CupertinoApp(
-      title: 'Personal Organizer',
+      title: 'Routine',
       debugShowCheckedModeBanner: false,
       theme: const CupertinoThemeData(
         primaryColor: CupertinoColors.systemBlue,

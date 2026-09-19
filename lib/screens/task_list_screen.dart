@@ -90,6 +90,14 @@ class _TaskListScreenState extends State<TaskListScreen>
     TaskDateFilter.overdue => 'Überfällig',
   };
 
+  String _sortLabel(TaskSort sort) => switch (sort) {
+    TaskSort.dueDate => 'Fälligkeit',
+    TaskSort.priority => 'Priorität',
+    TaskSort.category => 'Kategorie',
+    TaskSort.status => 'Status',
+    TaskSort.createdAt => 'Erstellt',
+  };
+
   Widget _buildDateFilter() => CupertinoMenuAnchor(
     menuChildren: [
       for (final filter in TaskDateFilter.values)
@@ -225,7 +233,74 @@ class _TaskListScreenState extends State<TaskListScreen>
               Expanded(child: _buildPriorityFilter()),
             ],
           ),
+          const SizedBox(height: 10),
+          Row(
+            children: <Widget>[
+              Expanded(child: _buildTagFilter()),
+              const SizedBox(width: 10),
+              Expanded(child: _buildSortFilter()),
+            ],
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildTagFilter() {
+    final selectedTag = _controller.tagFilter;
+    return CupertinoMenuAnchor(
+      menuChildren: <Widget>[
+        CupertinoMenuItem(
+          leading: Icon(
+            selectedTag == null
+                ? CupertinoIcons.check_mark
+                : CupertinoIcons.tag,
+            size: 16,
+          ),
+          onPressed: () => _controller.setTagFilter(null),
+          child: const Text('Alle Tags'),
+        ),
+        for (final tag in _controller.tags)
+          CupertinoMenuItem(
+            leading: Icon(
+              selectedTag?.toLowerCase() == tag.toLowerCase()
+                  ? CupertinoIcons.check_mark
+                  : CupertinoIcons.tag,
+              size: 16,
+            ),
+            onPressed: () => _controller.setTagFilter(tag),
+            child: Text(tag),
+          ),
+      ],
+      builder: (context, menu, child) => _filterButton(
+        key: const ValueKey<String>('tag-filter-button'),
+        label: selectedTag == null ? 'Alle Tags' : '#$selectedTag',
+        icon: CupertinoIcons.tag,
+        onPressed: menu.isOpen ? menu.close : menu.open,
+      ),
+    );
+  }
+
+  Widget _buildSortFilter() {
+    return CupertinoMenuAnchor(
+      menuChildren: <Widget>[
+        for (final sort in TaskSort.values)
+          CupertinoMenuItem(
+            leading: Icon(
+              sort == _controller.sort
+                  ? CupertinoIcons.check_mark
+                  : CupertinoIcons.arrow_up_arrow_down,
+              size: 16,
+            ),
+            onPressed: () => _controller.setSort(sort),
+            child: Text(_sortLabel(sort)),
+          ),
+      ],
+      builder: (context, menu, child) => _filterButton(
+        key: const ValueKey<String>('sort-button'),
+        label: _sortLabel(_controller.sort),
+        icon: CupertinoIcons.arrow_up_arrow_down,
+        onPressed: menu.isOpen ? menu.close : menu.open,
       ),
     );
   }
@@ -390,7 +465,8 @@ class _TaskListScreenState extends State<TaskListScreen>
       final bool hasFilters =
           _controller.searchQuery.trim().isNotEmpty ||
           _controller.categoryFilter != null ||
-          _controller.priorityFilter != null;
+          _controller.priorityFilter != null ||
+          _controller.tagFilter != null;
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
@@ -513,6 +589,32 @@ class _TaskListScreenState extends State<TaskListScreen>
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
+          if (task.tags.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 5,
+              runSpacing: 4,
+              children: task.tags
+                  .map(
+                    (tag) => Container(
+                      key: ValueKey<String>('task-${task.id}-tag-$tag'),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: CupertinoColors.tertiarySystemFill,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '#$tag',
+                        style: const TextStyle(fontSize: 11),
+                      ),
+                    ),
+                  )
+                  .toList(growable: false),
+            ),
+          ],
         ],
       ),
       trailing: CupertinoButton(
@@ -544,6 +646,7 @@ class _TaskListScreenState extends State<TaskListScreen>
         title: draft.title,
         description: draft.description,
         categoryId: draft.category,
+        tags: draft.tags,
         priority: draft.priority,
         dueDate: draft.dueDate,
         reminders: draft.reminders,
@@ -573,6 +676,7 @@ class _TaskListScreenState extends State<TaskListScreen>
           description: draft.description,
           categoryId: draft.category,
           clearCategoryId: draft.category.isEmpty,
+          tags: draft.tags,
           priority: draft.priority,
           dueDate: draft.dueDate,
           clearDueDate: draft.dueDate == null,

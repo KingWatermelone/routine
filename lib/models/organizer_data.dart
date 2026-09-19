@@ -51,8 +51,9 @@ class OrganizerData {
   };
 
   factory OrganizerData.fromJson(Map<String, Object?> json) {
-    if (json['version'] != 2)
+    if (json['version'] != 2) {
       throw const FormatException('Unsupported data version');
+    }
     final categories = (json['categories'] as List)
         .map(
           (item) =>

@@ -8,7 +8,7 @@
 PRODUCT_NAME = routine
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.example.routine
+PRODUCT_BUNDLE_IDENTIFIER = com.kingwatermelone.routine
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 com.example. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2026 KingWatermelone. All rights reserved.
