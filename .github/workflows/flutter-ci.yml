@@ -39,7 +39,10 @@ jobs:
 
   windows-build:
     name: Build Windows
-    runs-on: windows-latest
+    # Match the Visual Studio 2022 toolchain documented for the application.
+    # windows-latest currently resolves to VS 2026, whose standard library
+    # rejects a transitive plugin's experimental coroutine header.
+    runs-on: windows-2022
     timeout-minutes: 30
     steps:
       - name: Check out repository
